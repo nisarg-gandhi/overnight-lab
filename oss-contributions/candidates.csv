@@ -1,25 +1,25 @@
 rank,repo,category,score,activity,openness,responsiveness,beginner_issues,setup_docs,welcoming,fit,commits_90d,authors_90d,new_authors_180d,pr_merge_rate,pr_merged_6m,pr_opened_6m,recent_issues_answered,open_unassigned_beginner_issues,contributing_file,last_commit,programs,notes,what
-1,matplotlib/matplotlib,Beginner-org,92.9,14.7,18.8,19.4,15.0,8.0,9.0,8.0,500,50,64,71%,389,551,93%,56,.github/CONTRIBUTING.md,2026-10-16,GSoC(via NumFOCUS),uses 'first-contribution' label; count = confirmed bugs unassigned,Plotting library
+1,matplotlib/matplotlib,Beginner-org,92.9,14.7,18.8,19.4,15.0,8.0,9.0,8.0,500,50,64,71%,389,551,93%,56,.github/CONTRIBUTING.md,2026-10-16,GSoC 2026 (via NumFOCUS),uses 'first-contribution' label; count = confirmed bugs unassigned,Plotting library
 2,scikit-learn/scikit-learn,ML/DL,91.3,14.7,15.7,19.9,15.0,8.0,8.0,10.0,238,61,81,52%,396,764,95%,176,CONTRIBUTING.md,2026-10-16,,,The classic Python ML library
-3,pandas-dev/pandas,Data,90.0,15.0,18.6,18.5,15.0,6.0,8.0,9.0,1042,117,159,67%,864,1285,91%,150,,2026-10-16,GSoC(via NumFOCUS),count = Docs/Testing/Needs Tests labels (pandas rarely uses GFI),DataFrame library
+3,pandas-dev/pandas,Data,90.0,15.0,18.6,18.5,15.0,6.0,8.0,9.0,1042,117,159,67%,864,1285,91%,150,,2026-10-16,NumFOCUS project (not a GSoC 2026 sub-org),count = Docs/Testing/Needs Tests labels (pandas rarely uses GFI),DataFrame library
 4,mlflow/mlflow,ML/DL,88.8,15.0,18.0,16.8,15.0,7.0,8.0,9.0,1092,191,212,64%,1317,2053,86%,61,CONTRIBUTING.md,2026-10-16,,many have has-closing-pr,ML lifecycle platform: tracking/registry/GenAI tracing + evaluation
-5,zulip/zulip,Beginner-org,88.3,15.0,15.3,17.9,15.0,9.0,10.0,6.0,860,63,40,56%,464,822,89%,56,CONTRIBUTING.md,2026-10-16,GSoC(Zulip),help-wanted issues have 20-47 comments (heavily contested),Open-source team chat (Django + TypeScript)
+5,zulip/zulip,Beginner-org,88.3,15.0,15.3,17.9,15.0,9.0,10.0,6.0,860,63,40,56%,464,822,89%,56,CONTRIBUTING.md,2026-10-16,GSoC regular (Zulip org),help-wanted issues have 20-47 comments (heavily contested),Open-source team chat (Django + TypeScript)
 6,huggingface/transformers,ML/DL,86.6,15.0,15.8,17.6,13.2,7.0,8.0,10.0,918,214,280,52%,1055,2016,89%,25,CONTRIBUTING.md,2026-10-16,,only Good Second Issue left unassigned,Model definitions + pipelines for thousands of pretrained models
 7,secdev/scapy,Networking,84.6,13.5,17.7,18.8,9.7,8.0,7.0,10.0,217,33,32,71%,74,104,92%,10,CONTRIBUTING.md,2026-10-11,,,Packet crafting/sniffing/dissection in Python
-8,sktime/sktime,ML/DL,83.7,15.0,15.2,11.6,15.0,8.0,10.0,9.0,355,135,151,49%,327,668,72%,194,CONTRIBUTING.md,2026-10-16,GSoC(via NumFOCUS)/ESoC,very active GFI pipeline,Unified framework for ML with time series
-9,pydata/xarray,Data,83.0,14.2,15.2,13.6,15.0,8.0,9.0,8.0,159,65,63,51%,83,162,77%,59,CONTRIBUTING.md,2026-10-16,GSoC(via NumFOCUS),uses contrib-good-first-issue label,N-dimensional labelled arrays (NetCDF/Zarr)
+8,sktime/sktime,ML/DL,83.7,15.0,15.2,11.6,15.0,8.0,10.0,9.0,355,135,151,49%,327,668,72%,194,CONTRIBUTING.md,2026-10-16,own mentoring programme; GSoC in past years (verify 2027),very active GFI pipeline,Unified framework for ML with time series
+9,pydata/xarray,Data,83.0,14.2,15.2,13.6,15.0,8.0,9.0,8.0,159,65,63,51%,83,162,77%,59,CONTRIBUTING.md,2026-10-16,NumFOCUS project (not a GSoC 2026 sub-org),uses contrib-good-first-issue label,N-dimensional labelled arrays (NetCDF/Zarr)
 10,marimo-team/marimo,Data,80.4,15.0,20.0,11.5,10.9,7.0,8.0,8.0,505,65,92,78%,728,931,72%,14,CONTRIBUTING.md,2026-10-16,,python + typescript GFIs,Reactive Python notebook (Python + TypeScript)
 11,unit8co/darts,ML/DL,79.8,11.9,18.3,13.7,11.9,8.0,7.0,9.0,72,30,32,75%,68,91,78%,18,CONTRIBUTING.md,2026-10-16,,,Time-series forecasting/anomaly-detection library
 12,numpy/numpy,Beginner-org,79.3,15.0,19.3,17.6,5.3,6.0,8.0,8.0,779,88,104,71%,617,864,89%,8,.github/CONTRIBUTING.md,2026-10-16,,'sprintable' issues mostly old,N-dimensional arrays (C + Python)
 13,huggingface/peft,ML/DL,79.0,14.5,17.9,17.0,1.7,9.0,9.0,10.0,200,72,95,64%,202,318,87%,1,CONTRIBUTING.md,2026-10-16,,only 1 meta issue labeled; maintainer very responsive (BenjaminBossan),Parameter-efficient fine-tuning (LoRA etc.) for PyTorch models
-14,pylint-dev/pylint,DevTools,77.5,14.7,19.7,4.1,15.0,8.0,8.0,8.0,243,72,79,74%,181,246,51%,366,.github/CONTRIBUTING.md,2026-10-16,GSoC(PSF historically),'Needs PR' label = help wanted (366); only 4 'Good first issue',Static code analyser for Python
-15,pymc-devs/pymc,ML/DL,77.0,10.8,12.6,14.5,15.0,7.0,9.0,8.0,54,20,21,48%,53,111,80%,53,CONTRIBUTING.md,2026-10-13,GSoC(via NumFOCUS),,Probabilistic programming / Bayesian modelling
+14,pylint-dev/pylint,DevTools,77.5,14.7,19.7,4.1,15.0,8.0,8.0,8.0,243,72,79,74%,181,246,51%,366,.github/CONTRIBUTING.md,2026-10-16,GSoC in past years via PSF (verify 2027),'Needs PR' label = help wanted (366); only 4 'Good first issue',Static code analyser for Python
+15,pymc-devs/pymc,ML/DL,77.0,10.8,12.6,14.5,15.0,7.0,9.0,8.0,54,20,21,48%,53,111,80%,53,CONTRIBUTING.md,2026-10-13,GSoC 2026 (via NumFOCUS),,Probabilistic programming / Bayesian modelling
 16,pytorch/pytorch,ML/DL,76.2,15.0,15.6,12.7,14.0,4.0,6.0,9.0,4606,771,733,51%,5500,10782,75%,31,CONTRIBUTING.md,2026-10-16,,merged counted via 'Merged' label (ghstack),The core deep-learning framework; huge C++/CUDA codebase with Python frontend
-17,pytest-dev/pytest,DevTools,75.1,14.2,16.3,12.7,7.9,8.0,8.0,8.0,256,42,70,56%,219,388,75%,25,CONTRIBUTING.rst,2026-10-10,GSoC(PSF historically),,Python testing framework
+17,pytest-dev/pytest,DevTools,75.1,14.2,16.3,12.7,7.9,8.0,8.0,8.0,256,42,70,56%,219,388,75%,25,CONTRIBUTING.rst,2026-10-10,GSoC in past years via PSF (verify 2027),,Python testing framework
 18,huggingface/diffusers,ML/DL,74.3,15.0,15.2,5.1,15.0,7.0,8.0,9.0,296,63,75,50%,372,746,54%,67,CONTRIBUTING.md,2026-10-15,,contributions-welcome label used,Diffusion-model pipelines (image/video/audio generation)
 19,astral-sh/ruff,DevTools,74.3,15.0,18.3,14.2,6.7,6.0,8.0,6.0,1248,112,139,66%,1815,2751,79%,15,CONTRIBUTING.md,2026-10-16,,Rust codebase,Rust-based Python linter/formatter
 20,jax-ml/jax,ML/DL,74.0,15.0,19.7,12.0,8.2,6.0,5.0,8.0,2065,167,106,74%,2055,2791,73%,29,CONTRIBUTING.md,2026-10-16,,labels mostly 2023 'contributions welcome',Composable transformations of NumPy programs (grad/jit/vmap)
-21,networkx/networkx,Beginner-org,72.6,11.6,13.3,19.8,3.9,8.0,8.0,8.0,89,22,29,48%,94,194,94%,4,CONTRIBUTING.rst,2026-10-01,GSoC(via NumFOCUS),uses 'Sprint' label; issues old,Graph/network analysis
+21,networkx/networkx,Beginner-org,72.6,11.6,13.3,19.8,3.9,8.0,8.0,8.0,89,22,29,48%,94,194,94%,4,CONTRIBUTING.rst,2026-10-01,GSoC in past years (verify 2027),uses 'Sprint' label; issues old,Graph/network analysis
 22,narwhals-dev/narwhals,Data,72.0,12.0,17.9,8.6,6.5,9.0,10.0,8.0,103,24,25,80%,185,232,64%,4,CONTRIBUTING.md,2026-10-16,,80% merge rate; very newcomer-friendly maintainers,Lightweight compatibility layer between dataframe libraries
 23,netbox-community/netbox,Networking,71.6,13.1,17.8,6.5,11.2,7.0,7.0,9.0,423,21,23,92%,404,440,58%,15,CONTRIBUTING.md,2026-10-16,,'status: needs owner' workflow; must be assigned before PR,Network source-of-truth / IPAM / DCIM (Django)
 24,vllm-project/vllm,AI/LLM,71.1,15.0,14.3,13.4,10.4,4.0,6.0,8.0,4352,1084,1143,44%,4388,9941,77%,12,.github/CONTRIBUTING.md,2026-10-16,,GPU-heavy; issues advanced,High-throughput LLM inference engine (GPU-centric)
@@ -28,11 +28,11 @@ rank,repo,category,score,activity,openness,responsiveness,beginner_issues,setup_
 27,mitmproxy/mitmproxy,Networking,70.5,9.7,14.1,10.6,12.1,7.0,7.0,10.0,27,17,26,54%,76,141,69%,19,CONTRIBUTING.md,2026-10-13,,160 open feature requests (kind/feature),Interactive TLS-capable intercepting HTTP proxy
 28,huggingface/huggingface_hub,ML/DL,70.3,14.7,19.3,9.6,1.7,9.0,8.0,8.0,231,65,75,72%,315,437,66%,1,CONTRIBUTING.md,2026-10-14,,only docs-translation meta issue,Python client for the Hugging Face Hub (+ hf CLI)
 29,kornia/kornia,ML/DL,69.9,15.0,20.0,0.9,10.0,8.0,7.0,9.0,1169,159,170,82%,173,211,42%,11,CONTRIBUTING.md,2026-10-16,,,Differentiable computer-vision library for PyTorch
-30,sympy/sympy,Beginner-org,69.2,14.8,11.5,10.9,9.0,8.0,8.0,7.0,569,54,55,33%,140,430,70%,49,CONTRIBUTING.md,2026-10-16,GSoC(SymPy),33% merge rate; many Easy-to-Fix issues old,Symbolic mathematics in Python
-31,pytorch/ignite,ML/DL,69.1,9.4,11.4,15.8,7.6,8.0,8.0,9.0,26,15,17,43%,31,72,83%,22,CONTRIBUTING.md,2026-10-14,GSoC(PyTorch-Ignite historically),labeled issues mostly 2021-2023,Lightweight PyTorch training/eval library
+30,sympy/sympy,Beginner-org,69.2,14.8,11.5,10.9,9.0,8.0,8.0,7.0,569,54,55,33%,140,430,70%,49,CONTRIBUTING.md,2026-10-16,GSoC regular (SymPy org),33% merge rate; many Easy-to-Fix issues old,Symbolic mathematics in Python
+31,pytorch/ignite,ML/DL,69.1,9.4,11.4,15.8,7.6,8.0,8.0,9.0,26,15,17,43%,31,72,83%,22,CONTRIBUTING.md,2026-10-14,GSoC 2026 (PyTorch-Ignite via NumFOCUS),labeled issues mostly 2021-2023,Lightweight PyTorch training/eval library
 32,huggingface/trl,ML/DL,67.9,14.6,18.2,13.1,0.0,7.0,6.0,9.0,649,47,72,66%,689,1038,76%,0,CONTRIBUTING.md,2026-10-16,,,Post-training (SFT/DPO/GRPO) library for LLMs
-33,keras-team/keras,ML/DL,67.7,15.0,18.5,10.5,2.7,7.0,5.0,9.0,360,81,84,67%,373,556,69%,2,CONTRIBUTING.md,2026-10-16,GSoC(TensorFlow/Keras),,Multi-backend (JAX/TF/PyTorch) deep-learning API
-34,aeon-toolkit/aeon,ML/DL,67.5,12.3,18.8,10.3,0.0,8.0,9.0,9.0,89,33,47,74%,181,245,68%,0,CONTRIBUTING.md,2026-10-12,GSoC(via NumFOCUS),,Time-series ML toolkit (classification/clustering/anomaly)
+33,keras-team/keras,ML/DL,67.7,15.0,18.5,10.5,2.7,7.0,5.0,9.0,360,81,84,67%,373,556,69%,2,CONTRIBUTING.md,2026-10-16,GSoC in past years via TensorFlow (verify 2027),,Multi-backend (JAX/TF/PyTorch) deep-learning API
+34,aeon-toolkit/aeon,ML/DL,67.5,12.3,18.8,10.3,0.0,8.0,9.0,9.0,89,33,47,74%,181,245,68%,0,CONTRIBUTING.md,2026-10-12,GSoC in past years (verify 2027),,Time-series ML toolkit (classification/clustering/anomaly)
 35,deepset-ai/haystack,AI/LLM,67.5,15.0,20.0,9.5,0.0,8.0,7.0,8.0,677,134,159,82%,874,1064,66%,0,CONTRIBUTING.md,2026-10-16,,uses 'Contributions wanted!' label - none unassigned now,Production LLM/RAG pipeline framework
 36,aio-libs/aiohttp,Networking,64.9,13.5,19.0,7.7,1.7,7.0,7.0,9.0,243,31,45,85%,811,955,61%,1,CONTRIBUTING.rst,2026-10-11,,merged count inflated by dependabot backports,Async HTTP client/server
 37,langchain-ai/langchain,AI/LLM,63.5,14.9,14.0,10.0,5.6,6.0,5.0,8.0,305,57,70,44%,896,2053,n/m,3,,2026-10-16,,,LLM application framework
@@ -42,7 +42,7 @@ rank,repo,category,score,activity,openness,responsiveness,beginner_issues,setup_
 41,Lightning-AI/torchmetrics,ML/DL,62.2,7.3,5.9,8.3,14.8,9.0,7.0,10.0,13,7,7,21%,17,80,63%,38,.github/CONTRIBUTING.md,2026-09-21,,,100+ PyTorch metric implementations with a uniform API
 42,pola-rs/polars,Data,62.1,15.0,19.3,2.2,6.5,5.0,7.0,7.0,862,77,78,72%,709,990,46%,4,CONTRIBUTING.md,2026-10-16,,core is Rust; 192 'accepted' bugs,Rust DataFrame engine with Python API
 43,run-llama/llama_index,AI/LLM,60.2,13.4,9.0,12.2,5.6,7.0,5.0,8.0,93,57,80,15%,154,1014,74%,3,CONTRIBUTING.md,2026-10-14,,15% merge rate - flooded with PRs,RAG / LLM data framework
-44,mesa/mesa,Beginner-org,59.9,11.4,16.3,8.2,0.0,8.0,9.0,7.0,76,22,22,68%,50,74,62%,0,CONTRIBUTING.md,2026-10-09,GSoC(Mesa),(projectmesa/mesa redirects to mesa/mesa),Agent-based modelling in Python
+44,mesa/mesa,Beginner-org,59.9,11.4,16.3,8.2,0.0,8.0,9.0,7.0,76,22,22,68%,50,74,62%,0,CONTRIBUTING.md,2026-10-09,GSoC in past years (verify 2027),(projectmesa/mesa redirects to mesa/mesa),Agent-based modelling in Python
 45,optuna/optuna,ML/DL,59.1,13.5,17.6,2.0,0.0,9.0,8.0,9.0,345,26,21,80%,115,144,45%,0,CONTRIBUTING.md,2026-10-16,,,Hyperparameter-optimization framework
 46,BerriAI/litellm,AI/LLM,57.8,15.0,13.8,10.0,0.0,6.0,5.0,8.0,11905,299,310,42%,3708,8909,n/m,0,CONTRIBUTING.md,2026-10-16,,huge PR volume,Unified proxy/SDK for 100+ LLM APIs
 47,Lightning-AI/pytorch-lightning,ML/DL,56.8,8.4,9.4,9.1,9.0,7.0,5.0,9.0,23,9,14,34%,61,179,65%,97,.github/CONTRIBUTING.md,2026-09-21,,,High-level PyTorch training framework (Trainer/Fabric)
@@ -63,7 +63,7 @@ rank,repo,category,score,activity,openness,responsiveness,beginner_issues,setup_
 62,google/flax,ML/DL,46.2,8.8,10.5,10.0,0.0,5.0,4.0,8.0,27,10,6,48%,48,101,n/m,0,,2026-10-12,,,Neural-network library for JAX
 63,dask/dask,Data,45.4,4.4,12.7,0.0,7.4,7.0,6.0,8.0,3,3,14,52%,90,173,28%,20,CONTRIBUTING.md,2026-09-29,,GFIs mostly old,Parallel computing with task scheduling
 64,pyg-team/pytorch_geometric,ML/DL,42.6,4.9,6.7,10.0,0.0,7.0,5.0,9.0,8,2,3,33%,27,83,n/m,NA,.github/CONTRIBUTING.md,2026-09-01,,low maintainer activity 2026,Graph neural networks for PyTorch
-65,deepchem/deepchem,ML/DL,41.7,6.2,4.5,10.0,0.0,6.0,7.0,8.0,8,5,5,17%,18,107,n/m,NA,CONTRIBUTING.md,2026-08-20,GSoC(DeepChem),low merge rate,Deep learning for chemistry/biology
+65,deepchem/deepchem,ML/DL,41.7,6.2,4.5,10.0,0.0,6.0,7.0,8.0,8,5,5,17%,18,107,n/m,NA,CONTRIBUTING.md,2026-08-20,GSoC in past years (verify 2027),low merge rate,Deep learning for chemistry/biology
 66,psf/requests,Networking,39.2,2.2,8.0,10.0,0.0,8.0,3.0,8.0,1,1,12,28%,52,185,n/m,NA,.github/CONTRIBUTING.md,2026-08-24,,feature-frozen,HTTP for Humans (feature-frozen)
 67,explosion/spaCy,ML/DL,37.4,6.4,2.0,10.0,0.0,7.0,4.0,8.0,13,4,2,5%,1,21,n/m,NA,CONTRIBUTING.md,2026-09-30,,near-dormant: 1 of 21 PRs merged,Industrial NLP library
 68,huggingface/smolagents,AI/LLM,36.8,3.8,2.9,10.0,0.0,8.0,4.0,8.0,3,2,4,4%,15,341,n/m,NA,CONTRIBUTING.md,2026-10-06,,4% merge rate - effectively stalled,Minimal code-agent library
