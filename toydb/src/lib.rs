@@ -4,6 +4,7 @@
 //! learning. See `README.md` for a tour and `DESIGN.md` for how every layer
 //! works.
 
+pub mod btree;
 pub mod error;
 pub mod storage;
 pub mod util;
