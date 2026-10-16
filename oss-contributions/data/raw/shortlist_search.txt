@@ -1,0 +1,104 @@
+# Refined search: is:open no:assignee -linked:pr (run 2026-10-16)
+## matplotlib (first-contribution) total 7
+32328 | macOS font discovery raises KeyError('_items') for an incomplete system_profiler font record | needs clarification, fonts, first-contribution | 4 | 2026-09-09
+32269 | tripcolor shading="gouraud" streaks on macOS arm64 | confirmed bug, agg, first-contribution | 13 | 2026-08-31
+32246 | Use a valid font cache from a read-only MPLCONFIGDIR instead of rebuilding in a temp dir | New feature, first-contribution | 5 | 2026-08-27
+31936 | Figure size change on macos in 3.11.0 macosx backend | first-contribution | 6 | 2026-06-22
+31809 | figure.canvas.manager is set to None between sequences of calls (ipympl) | first-contribution | 2 | 2026-06-03
+31378 | DOC: Systemic fix for missing thumbnails in user_interfaces gallery examples | docs examples, first-contribution | 7 | 2026-03-25
+31104 | OpenType fonts for mathematical formulas | New feature, mathtext, first-contribution | 5 | 2026-02-06
+## sklearn good first issue/Easy without linked PR: 0
+## pandas good first issue/Needs Tests total 25
+58867 | pyarrow dtype_backend incorrectly loads list-of-struct column with all-null field | Needs Tests, Arrow | 7 | 2024-05-30
+57837 | DateOffset with shift on a DST transition produces error | Needs Tests, Frequency | 4 | 2024-03-14
+55679 | setting 1.02 into float32 Series upcasts to float64 | Needs Tests | 19 | 2023-10-25
+53706 | SeriesGroupBy nlargest with as_index=False raises ValueError | Needs Tests, Groupby | 2 | 2023-06-16
+50296 | groupby sort issue when using rolling | Needs Tests | 5 | 2022-12-16
+47701 | random function argument to DataFrameGroupBy.aggregate changes Series to DataFrame | Needs Tests | 1 | 2022-07-13
+45800 | df.agg raises Exception on valid function in df.apply | Needs Tests | 1 | 2022-02-03
+## sklearn help wanted/Documentation (not Hard) w/o linked PR total 154
+35033 | DOC: RFECV per-split ranking and support shapes omit the feature axis | Documentation, Needs Triage | 1 | 2026-09-25
+34880 | SelectFromModel prefit fails unless fit is called when set_output(transform="pandas") | Documentation, Needs Decision | 10 | 2026-09-03
+34366 | Accessibility issues in documentation website | Documentation, frontend | 7 | 2026-06-22
+32661 | DOC Create triage guide in maintainer documentation | Documentation | 5 | 2025-11-06
+31595 | Attribute docstring does not show properly when there is a property with the same name | Documentation | 5 | 2025-06-19
+## mlflow good first issue/help wanted w/o linked PR total 40
+17702 | Add support to Amazon Bedrock Converse API | help wanted, genai | 5 | 2025-09-12
+16892 | Event & Stage Logging with Timeline Annotations | help wanted | 8 | 2025-07-25
+14841 | bookmark/share a UI view with Search Experiments box populated | uiux, help wanted | 5 | 2025-03-04
+11936 | Auto-refresh metrics | help wanted | 4 | 2024-05-08
+11484 | Allow docker args to be passed into mlflow models build-docker | help wanted, docker | 7 | 2024-03-21
+10878 | Log 4-bit quantized LLM with mlflow.transformers.log_model() | help wanted | 4 | 2024-01-23
+## zulip good first issue/help wanted w/o linked PR: only 2 (2018, 2020) -> most help-wanted issues already have competing PRs
+## transformers Good First/Second/Difficult w/o linked PR total 14 (all 2023-2025, most 'Difficult')
+30280 | modeling_t5 incompatible with multiprocessing | Good Second Issue, DeepSpeed | 7 | 2024-04-17
+29416 | results of run_mae.py pre-training were abnormal | Good Second Issue | 6 | 2024-03-03
+27975 | ImageToTextPipeline does not support InstructBlip Models | Good Second Issue | 7 | 2023-12-12
+28813 | Gradient Checkpointing + Flash Attention 2 for VisionTextDualEncoderModel | Good Difficult Issue | 4 | 2024-02-01
+## scapy w/o linked PR total 10
+4704 | get_if_addr for macOS vlan iface not returning correct address | bug | 15 | 2025-03-27
+3625 | Add support for PIM Register and Register Stop messages in scapy.contrib.pim | enhancement | 0 | 2022-05-26
+4680 | Add way to specify snapshot length and buffer size when using pcap | enhancement | 1 | 2025-03-01
+4739 | Provide a diff feature that refines packet comparison | enhancement, help wanted | 4 | 2025-05-09
+4055 | Unify Network Configuration reloading | enhancement | 0 | 2023-07-05
+3670 | FieldListFields used non-exclusively in a MultipleTypeField don't build correctly | bug | 1 | 2022-06-28
+## sktime GFI w/o linked PR total 80
+11375 | Performance improvements to onboard algorithms | good first issue | 7 | 2026-10-03
+11329 | Poor performance of global recursive reduction forecasters on panel data | bug, good first issue | 3 | 2026-09-28
+10652 | employ AI plus human oversight to complete remaining testing exceptions in tests._config | good first issue | 9 | 2026-07-26
+8384 | add test job with dev version of dependencies | good first issue, maintenance | 6 | 2025-06-12
+7285 | detection notebook - move plotting functions to detection.plotting | good first issue, documentation | 10 | 2024-10-17
+7237 | add unequal length and multivariate patterns to the classification tutorial | good first issue, documentation | 9 | 2024-10-08
+7196 | proper mathematical description in docstring of splitters | good first issue, documentation | 18 | 2024-09-29
+## xarray w/o linked PR total 36
+11721 | Tracking: open deprecations | contrib-help-wanted, contrib-good-first-issue | 3 | 2026-10-13
+10591 | Encoding a fill value of a structured type and serializing to Zarr (v2) | bug, contrib-good-first-issue, zarr | 2 | 2025-07-31
+10537 | A better gallery | contrib-help-wanted, documentation | 8 | 2025-07-15
+9432 | DataArray.rename does not copy data | contrib-help-wanted, documentation, faq | 13 | 2024-09-04
+9361 | to_netcdf fails to write to files previously opened with open_mfdataset | documentation, contrib-good-first-issue | 5 | 2024-08-14
+8239 | Address repo-review suggestions | contrib-good-first-issue | 8 | 2023-09-27
+## marimo w/o linked PR total 6
+6076 | Static HTML Export with dynamic mo.ui.tabs | help wanted | 1 | 2025-08-19
+3825 | Save markdown heading collapsed states | help wanted | 3 | 2025-02-17
+2918 | make the download options configurable | help wanted | 4 | 2024-11-21
+2405 | Enable user copy rendering code from mo.ui.data_explorer | help wanted | 3 | 2024-09-25
+## darts w/o linked PR total 16
+2685 | Add support for TFT feature importance over time | feature request, pr_welcome | 8 | 2025-02-19
+2489 | TFTExplainer explanations when trained on multiple series | bug, good first issue | 7 | 2024-08-01
+1278 | Allow historical forecast to work on time series with nan | good first issue | 1 | 2022-10-11
+1813 | Dirichlet Likelihood TFT model | bug, good first issue | 6 | 2023-06-03
+## pylint Needs PR + False Positive w/o linked PR total 105
+10916 | E1136 false positive on PySide6 overloaded signal subscript | FP, Lib specific, Needs PR | 1 | 2026-03-16
+10316 | Wave_write object from wave library confused with Wave_read | FP, Lib specific, Needs PR | 1 | 2025-03-27
+10144 | False positive E1133 not-an-iterable with pydantic model_fields | FP, Needs PR | 2 | 2024-12-19
+9977 | ungrouped-imports/wrong-import-order FP: only two isort options taken into account | FP, Needs PR | 0 | 2024-09-27
+9956 | False-positive E1101 no-member for numpy.dtypes.StringDType | FP, Needs PR | 2 | 2024-09-24
+9556 | using-constant-test triggers on a built-in exception property | FP, Needs PR | 0 | 2024-04-18
+## pymc beginner friendly w/o linked PR total 9 (all 2021-2023)
+6408 | Fail tests with unexpected warnings | beginner friendly, tests | 6 | 2022-12-21
+5791 | Infer dims & coords from xarray variables passed to pm.Data | beginner friendly | 7 | 2022-05-21
+5358 | Add Type Hints to distribution parameters | beginner friendly | 14 | 2022-01-15
+5263 | SMC sample_stats cannot be saved to netcdf | beginner friendly | 6 | 2021-12-15
+## numpy docs/sprintable w/o linked PR total 129
+32272 | DOC: .npz zip container is unspecified | Documentation, sustain-2026 | 6 | 2026-08-12
+31280 | dtype_to_descr and descr_to_dtype do not round-trip top-level subarray dtypes | Bug, Documentation | 6 | 2026-04-20
+30022 | DOC: Confusing advanced indexing when mixing tuple, integer, and range | Documentation | 3 | 2025-10-18
+29544 | DOC: examples in reference documentation are not run through doctest | Documentation | 7 | 2025-08-12
+28028 | DOC: Document IDE debugging setup | Documentation, sustain-2026 | 4 | 2024-12-18
+28311 | DOC: Incomplete documentation in ndarray functions | Documentation | 4 | 2025-02-09
+## netbox needs owner w/o linked PR total 12
+23412 | Pepper String in configuration.py should be raw string | documentation, needs owner | 0 | 2026-10-16
+23398 | handle_protectederror() lists dependent objects without object-level view permissions | bug, needs owner, severity low | 0 | 2026-10-14
+23248 | Add object tags to search results | feature, needs owner, complexity low | 0 | 2026-09-29
+23237 | Related Objects in Custom Fields are not clickable | bug, needs owner, severity low | 0 | 2026-09-25
+22165 | Add 3 new CableProfile choices | feature, needs owner, complexity low | 7 | 2026-05-11
+## peft recent (unlabeled) w/o linked PR total 24
+3985 | n_frequency_pattern, block_size_pattern and lambda_pattern lose their key order on save | - | 2 | 2026-10-15
+3995 | Loading an adapter from a repo subfolder fails with HF_HUB_OFFLINE=1 | - | 0 | 2026-10-16
+3996 | OLoRA initialization breaks GPT-2 (Conv1D) layers | - | 0 | 2026-10-16
+3955 | unload() returns the trained modules_to_save copy instead of the original module | - | 1 | 2026-10-13
+3967 | Mixed adapter batch raises KeyError when only one adapter has modules_to_save | - | 0 | 2026-10-14
+## mitmproxy feature/help wanted w/o linked PR total 133
+8283 | optional decompression for content-type: application/zlib | kind/feature | 2 | 2026-06-13
+8088 | happy eyeballs algorithm for ipv6/ipv4 | kind/feature | 1 | 2026-02-18
+8012 | Batch deletion of flows by pattern | kind/feature | 1 | 2025-12-03
