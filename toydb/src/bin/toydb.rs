@@ -127,8 +127,11 @@ impl Shell {
             },
             ".schema" => {
                 let sql = match arg {
-                    Some(t) => format!("SELECT sql FROM toydb_schema WHERE name = '{}'", t.replace('\'', "''")),
-                    None => "SELECT sql FROM toydb_schema".to_string(),
+                    Some(t) => format!(
+                        "SELECT sql FROM toydb_schema WHERE tbl_name = '{}' ORDER BY type DESC, name",
+                        t.replace('\'', "''")
+                    ),
+                    None => "SELECT sql FROM toydb_schema ORDER BY tbl_name, type DESC, name".to_string(),
                 };
                 match self.session.execute(&sql) {
                     Ok(QueryResult::Rows { rows, .. }) => {

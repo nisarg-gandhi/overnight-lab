@@ -281,3 +281,41 @@ fn bank_transfers_survive_power_failures() {
         }
     }
 }
+
+/// A transaction that dirties far more pages than the buffer pool holds:
+/// with no-steal, the pool must grow instead of evicting uncommitted pages.
+#[test]
+fn transaction_larger_than_buffer_pool() {
+    let vfs = MemVfs::new();
+    let options = Options {
+        storage: StorageOptions {
+            pool_pages: 8,
+            ..Default::default()
+        },
+        ..opts(100)
+    };
+    let db = Database::open_vfs(&vfs, "big.db", options.clone()).unwrap();
+    let mut s = db.session();
+    s.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, pad TEXT)").unwrap();
+    s.execute("BEGIN").unwrap();
+    for chunk in 0..40 {
+        let values: Vec<String> = (0..50)
+            .map(|i| format!("({}, '{}')", chunk * 50 + i, "x".repeat(200)))
+            .collect();
+        s.execute(&format!("INSERT INTO t VALUES {}", values.join(", "))).unwrap();
+    }
+    assert!(db.stats().page_count > 100, "{:?}", db.stats());
+    s.execute("ROLLBACK").unwrap();
+    assert_eq!(count(&mut s, "t"), 0);
+    s.execute("BEGIN").unwrap();
+    for i in 0..2000 {
+        s.execute(&format!("INSERT INTO t VALUES ({i}, '{}')", "y".repeat(200))).unwrap();
+    }
+    s.execute("COMMIT").unwrap();
+    drop(s);
+    drop(db);
+    let db = Database::open_vfs(&vfs, "big.db", options).unwrap();
+    let mut s = db.session();
+    assert_eq!(count(&mut s, "t"), 2000);
+    assert!(s.check_integrity().unwrap().is_empty());
+}
