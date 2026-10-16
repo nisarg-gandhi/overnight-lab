@@ -31,7 +31,7 @@
 use std::fmt;
 use std::ops::Bound;
 
-use super::ast::{BinOp, Expr, Select, SelectItem, UnOp};
+use super::ast::{BinOp, Expr, JoinKind, Select, SelectItem, UnOp};
 use super::expr::{AggFn, BExpr, ScalarFn};
 use crate::catalog::{Catalog, Index, Table};
 use crate::error::{query_err, Result};
@@ -71,12 +71,34 @@ pub enum Plan {
     /// Produces one empty row: the input of `SELECT 1 + 1` (no FROM).
     SingleRow,
     Scan { table: Table, access: Access },
+    /// Nested-loop join: for each row from `left`, find rows of `right`
+    /// (by lookup if possible, else by scanning a materialized copy) and
+    /// emit `left ++ right` for pairs satisfying `on`.
+    Join {
+        left: Box<Plan>,
+        right: Table,
+        lookup: Option<JoinLookup>,
+        on: Option<BExpr>,
+        left_join: bool,
+        desc: String,
+    },
     Filter { input: Box<Plan>, pred: BExpr, desc: String },
     Aggregate { input: Box<Plan>, groups: Vec<BExpr>, aggs: Vec<AggCall>, desc: String },
     Project { input: Box<Plan>, exprs: Vec<BExpr>, desc: String },
     Distinct { input: Box<Plan> },
     Sort { input: Box<Plan>, keys: Vec<(usize, bool)>, desc: String },
     Limit { input: Box<Plan>, limit: Option<u64>, offset: u64 },
+}
+
+/// How a join finds the matching rows of its right table for one left row.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JoinLookup {
+    /// Evaluated on the left row: the value to look up.
+    pub key: BExpr,
+    /// Look it up in the right table's primary key (`None`) or an index.
+    pub index: Option<Index>,
+    /// e.g. "id = u.id", for EXPLAIN.
+    pub desc: String,
 }
 
 /// A planned query: the operator tree and its output column names.
@@ -88,10 +110,12 @@ pub struct QueryPlan {
 
 // --- binding -----------------------------------------------------------------------
 
-/// Resolves column names to positions. In aggregate mode, expressions are
-/// resolved against the Aggregate operator's output instead of the table.
+/// Resolves column names to positions. The input row is the concatenation
+/// of the rows of `tables`, in order; each table is referred to by its
+/// alias, or its name if it has none. In aggregate mode, expressions are
+/// resolved against the Aggregate operator's output instead.
 pub struct Binder<'a> {
-    table: Option<&'a Table>,
+    tables: Vec<(&'a str, &'a Table)>,
     agg: Option<(&'a [Expr], &'a [Expr])>,
     /// Where we are, for error messages ("WHERE", "SET", ...).
     context: &'static str,
@@ -102,9 +126,15 @@ pub fn is_aggregate(e: &Expr) -> bool {
 }
 
 impl<'a> Binder<'a> {
+    /// A binder over a single table (or none, for constant expressions).
     pub fn new(table: Option<&'a Table>, context: &'static str) -> Self {
+        Self::over(table.map(|t| (t.name.as_str(), t)).into_iter().collect(), context)
+    }
+
+    /// A binder over several tables: `(reference name, table)` pairs.
+    pub fn over(tables: Vec<(&'a str, &'a Table)>, context: &'static str) -> Self {
         Binder {
-            table,
+            tables,
             agg: None,
             context,
         }
@@ -173,16 +203,34 @@ impl<'a> Binder<'a> {
     }
 
     fn column(&self, qualifier: Option<&str>, name: &str) -> Result<usize> {
-        let Some(t) = self.table else {
+        if self.tables.is_empty() {
             return Err(query_err!("no such column: {name} (there is no FROM clause)"));
-        };
+        }
         if let Some(q) = qualifier {
-            if q != t.name {
+            if !self.tables.iter().any(|(r, _)| *r == q) {
                 return Err(query_err!("no such table in this query: {q}"));
             }
         }
-        t.column_index(name)
-            .ok_or_else(|| query_err!("no such column: {name} in table {}", t.name))
+        let mut found = None;
+        let mut offset = 0;
+        for (r, t) in &self.tables {
+            if qualifier.is_none_or(|q| q == *r) {
+                if let Some(i) = t.column_index(name) {
+                    if found.is_some() {
+                        return Err(query_err!("column name {name} is ambiguous; qualify it with a table name"));
+                    }
+                    found = Some(offset + i);
+                }
+            }
+            offset += t.columns.len();
+        }
+        found.ok_or_else(|| match qualifier {
+            Some(q) => query_err!("no such column: {q}.{name}"),
+            None if self.tables.len() == 1 => {
+                query_err!("no such column: {name} in table {}", self.tables[0].1.name)
+            }
+            None => query_err!("no such column: {name}"),
+        })
     }
 }
 
@@ -239,11 +287,11 @@ impl ColumnBounds {
 
 /// Extract `col = c`, `col < c` (either side), `col BETWEEN c1 AND c2`
 /// constraints on column `col` from the AND-ed parts of the filter.
-fn column_bounds(table: &Table, parts: &[&Expr], col: usize) -> ColumnBounds {
+fn column_bounds(table: &Table, reference: &str, parts: &[&Expr], col: usize) -> ColumnBounds {
     let column = &table.columns[col];
     let is_col = |e: &Expr| {
         matches!(e, Expr::Column(q, n)
-            if n == &column.name && q.as_ref().is_none_or(|q| q == &table.name))
+            if n == &column.name && q.as_ref().is_none_or(|q| q == reference))
     };
     // Only use constants of exactly the column's type: the key encoding
     // orders values within one type, so `id < 2.5` on an INTEGER column
@@ -318,20 +366,22 @@ fn column_bounds(table: &Table, parts: &[&Expr], col: usize) -> ColumnBounds {
 ///
 /// The whole WHERE clause is always re-checked on the rows produced, so the
 /// access path only has to return a superset of the matching rows.
-pub fn choose_access(table: &Table, filter: Option<&Expr>) -> Access {
+///
+/// `reference` is the name the query uses for the table (its alias, if any).
+pub fn choose_access(table: &Table, reference: &str, filter: Option<&Expr>) -> Access {
     let Some(filter) = filter else {
         return Access::Full;
     };
     let mut parts = vec![];
     conjuncts(filter, &mut parts);
-    let pk = table.pk.map(|pk| column_bounds(table, &parts, pk));
+    let pk = table.pk.map(|pk| column_bounds(table, reference, &parts, pk));
     if let Some(ColumnBounds { eq: Some(v), .. }) = pk {
         return Access::Key(v);
     }
     let mut indexed: Vec<(&Index, ColumnBounds)> = table
         .indexes
         .iter()
-        .map(|ix| (ix, column_bounds(table, &parts, ix.columns[0])))
+        .map(|ix| (ix, column_bounds(table, reference, &parts, ix.columns[0])))
         .collect();
     // Unique indexes first: an equality on them matches at most one row.
     indexed.sort_by_key(|(ix, _)| !ix.unique);
@@ -376,19 +426,90 @@ fn count_const(e: &Expr, what: &'static str) -> Result<u64> {
     }
 }
 
+/// Plan the FROM clause: a scan of the first table, then one nested-loop
+/// join per additional table.
+fn plan_from<'a>(catalog: &'a Catalog, sel: &'a Select) -> Result<(Plan, Vec<(&'a str, &'a Table)>)> {
+    let Some(first) = &sel.from else {
+        return Ok((Plan::SingleRow, vec![]));
+    };
+    let mut scope: Vec<(&str, &Table)> = vec![(first.reference(), catalog.get(&first.name)?)];
+    // The first table's rows always reach the output (it is never the
+    // NULL-padded side of a LEFT JOIN), so WHERE may pick its access path.
+    let mut plan = Plan::Scan {
+        table: scope[0].1.clone(),
+        access: choose_access(scope[0].1, scope[0].0, sel.filter.as_ref()),
+    };
+    for join in &sel.joins {
+        let reference = join.table.reference();
+        if scope.iter().any(|(r, _)| *r == reference) {
+            return Err(query_err!("table name {reference} is used twice; give one an alias"));
+        }
+        let right = catalog.get(&join.table.name)?;
+        let left_scope = scope.clone();
+        scope.push((reference, right));
+        let on = match &join.on {
+            Some(e) => Some(Binder::over(scope.clone(), "ON").bind(e)?),
+            None => None,
+        };
+        let lookup = join
+            .on
+            .as_ref()
+            .and_then(|e| find_join_lookup(e, right, reference, &left_scope));
+        let kind = match join.kind {
+            JoinKind::Left => "LEFT ",
+            _ => "",
+        };
+        let desc = match &join.on {
+            Some(e) => format!("{kind}JOIN {reference} ON {e}"),
+            None => format!("CROSS JOIN {reference}"),
+        };
+        plan = Plan::Join {
+            left: Box::new(plan),
+            right: right.clone(),
+            lookup,
+            on,
+            left_join: join.kind == JoinKind::Left,
+            desc,
+        };
+    }
+    Ok((plan, scope))
+}
+
+/// Look for an ON conjunct `right.col = <expression over left tables>` where
+/// `col` is the right table's primary key or the first column of one of its
+/// indexes. Then each left row needs one lookup instead of a full scan.
+fn find_join_lookup(on: &Expr, right: &Table, reference: &str, left: &[(&str, &Table)]) -> Option<JoinLookup> {
+    let mut parts = vec![];
+    conjuncts(on, &mut parts);
+    let left_binder = Binder::over(left.to_vec(), "ON");
+    let right_column = |e: &Expr| match e {
+        Expr::Column(q, n) if q.as_deref().is_none_or(|q| q == reference) => right.column_index(n),
+        _ => None,
+    };
+    let mut best: Option<JoinLookup> = None;
+    for part in parts {
+        let Expr::Binary(BinOp::Eq, a, b) = part else { continue };
+        for (col_side, key_side) in [(a, b), (b, a)] {
+            let Some(col) = right_column(col_side) else { continue };
+            // The other side must only use columns of the left tables.
+            let Ok(key) = left_binder.bind(key_side) else { continue };
+            let desc = format!("{} = {key_side}", right.columns[col].name);
+            if right.pk == Some(col) {
+                return Some(JoinLookup { key, index: None, desc });
+            }
+            if best.is_none() {
+                if let Some(ix) = right.indexes.iter().find(|ix| ix.columns[0] == col) {
+                    best = Some(JoinLookup { key, index: Some(ix.clone()), desc });
+                }
+            }
+        }
+    }
+    best
+}
+
 pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
-    let table = match &sel.from {
-        Some(name) => Some(catalog.get(name)?),
-        None => None,
-    };
-    let mut plan = match table {
-        Some(t) => Plan::Scan {
-            table: t.clone(),
-            access: choose_access(t, sel.filter.as_ref()),
-        },
-        None => Plan::SingleRow,
-    };
-    let row_binder = Binder::new(table, "WHERE");
+    let (mut plan, scope) = plan_from(catalog, sel)?;
+    let row_binder = Binder::over(scope.clone(), "WHERE");
     if let Some(f) = &sel.filter {
         plan = Plan::Filter {
             input: Box::new(plan),
@@ -397,14 +518,34 @@ pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
         };
     }
 
-    // Expand `*` into the table's columns.
+    // Expand `*` and `t.*` into (qualified) column references.
     let mut items: Vec<(Expr, String)> = vec![];
     for item in &sel.items {
         match item {
-            SelectItem::Wildcard => {
-                let t = table.ok_or_else(|| query_err!("SELECT * requires a FROM clause"))?;
-                for c in &t.columns {
-                    items.push((Expr::Column(None, c.name.clone()), c.name.clone()));
+            SelectItem::Wildcard | SelectItem::TableWildcard(_) => {
+                if scope.is_empty() {
+                    return Err(query_err!("SELECT * requires a FROM clause"));
+                }
+                let wanted = match item {
+                    SelectItem::TableWildcard(t) => {
+                        if !scope.iter().any(|(r, _)| r == t) {
+                            return Err(query_err!("no such table in this query: {t}"));
+                        }
+                        Some(t.as_str())
+                    }
+                    _ => None,
+                };
+                for (r, t) in &scope {
+                    if wanted.is_none_or(|w| w == *r) {
+                        for c in &t.columns {
+                            let e = if scope.len() == 1 {
+                                Expr::Column(None, c.name.clone())
+                            } else {
+                                Expr::Column(Some(r.to_string()), c.name.clone())
+                            };
+                            items.push((e, c.name.clone()));
+                        }
+                    }
                 }
             }
             SelectItem::Expr(e, alias) => items.push((e.clone(), item_name(e, alias))),
@@ -418,7 +559,7 @@ pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
         .items
         .iter()
         .filter_map(|i| match i {
-            SelectItem::Expr(e, Some(a)) if table.is_none_or(|t| t.column_index(a).is_none()) => {
+            SelectItem::Expr(e, Some(a)) if scope.iter().all(|(_, t)| t.column_index(a).is_none()) => {
                 Some((a.clone(), e.clone()))
             }
             _ => None,
@@ -480,14 +621,14 @@ pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
         }
     }
     let aggregating = !group_by.is_empty() || !agg_exprs.is_empty();
-    let mut binder = Binder::new(table, "this context");
+    let mut binder = Binder::over(scope.clone(), "this context");
     if aggregating {
-        let group_binder = Binder::new(table, "GROUP BY");
+        let group_binder = Binder::over(scope.clone(), "GROUP BY");
         let groups = group_by
             .iter()
             .map(|g| group_binder.bind(g))
             .collect::<Result<Vec<_>>>()?;
-        let arg_binder = Binder::new(table, "aggregate arguments");
+        let arg_binder = Binder::over(scope.clone(), "aggregate arguments");
         let mut aggs = vec![];
         for a in &agg_exprs {
             let Expr::Function { name, args, distinct, star } = a else { unreachable!() };
@@ -654,6 +795,21 @@ impl Plan {
                         };
                         writeln!(f, "{pad}IndexScan {} using {} ({cond})", table.name, index.name)?
                     }
+                }
+                None
+            }
+            Plan::Join { left, right, lookup, desc, .. } => {
+                writeln!(f, "{pad}NestedLoopJoin {desc}")?;
+                left.fmt_indented(f, depth + 1)?;
+                let inner = "  ".repeat(depth + 1);
+                match lookup {
+                    Some(JoinLookup { index: None, desc, .. }) => {
+                        writeln!(f, "{inner}Lookup {} by primary key ({desc})", right.name)?
+                    }
+                    Some(JoinLookup { index: Some(ix), desc, .. }) => {
+                        writeln!(f, "{inner}IndexLookup {} using {} ({desc})", right.name, ix.name)?
+                    }
+                    None => writeln!(f, "{inner}Scan {} (full, materialized once)", right.name)?,
                 }
                 None
             }

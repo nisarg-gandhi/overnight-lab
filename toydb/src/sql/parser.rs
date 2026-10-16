@@ -7,9 +7,13 @@
 //! ```text
 //! statement   := select | insert | update | delete | create | drop
 //!              | BEGIN [TRANSACTION] | COMMIT | ROLLBACK | EXPLAIN statement
-//! select      := SELECT [DISTINCT] item {, item} [FROM ident]
+//! select      := SELECT [DISTINCT] item {, item} [FROM from]
 //!                [WHERE expr] [GROUP BY expr {, expr}] [HAVING expr]
 //!                [ORDER BY expr [ASC|DESC] {, ...}] [LIMIT expr [OFFSET expr]]
+//! item        := * | ident . * | expr [[AS] ident]
+//! from        := table { , table | [INNER | CROSS] JOIN table [ON expr]
+//!                      | LEFT [OUTER] JOIN table ON expr }
+//! table       := ident [[AS] ident]
 //! insert      := INSERT INTO ident [( ident {, ident} )]
 //!                VALUES ( expr {, expr} ) {, ( ... )}
 //! update      := UPDATE ident SET ident = expr {, ident = expr} [WHERE expr]
@@ -203,6 +207,13 @@ impl Parser<'_> {
         loop {
             if self.eat(&Token::Star) {
                 items.push(SelectItem::Wildcard);
+            } else if matches!(self.peek(), Some(Token::Ident(_)))
+                && self.peek_at(1) == Some(&Token::Dot)
+                && self.peek_at(2) == Some(&Token::Star)
+            {
+                let t = self.ident()?;
+                self.pos += 2;
+                items.push(SelectItem::TableWildcard(t));
             } else {
                 let e = self.expr()?;
                 let alias = if self.eat_kw(Keyword::As) {
@@ -218,11 +229,39 @@ impl Parser<'_> {
                 break;
             }
         }
-        let from = if self.eat_kw(Keyword::From) {
-            Some(self.ident()?)
-        } else {
-            None
-        };
+        let mut from = None;
+        let mut joins = vec![];
+        if self.eat_kw(Keyword::From) {
+            from = Some(self.table_ref()?);
+            loop {
+                let kind = if self.eat(&Token::Comma) {
+                    JoinKind::Cross
+                } else if self.eat_kw(Keyword::Cross) {
+                    self.expect_kw(Keyword::Join)?;
+                    JoinKind::Cross
+                } else if self.eat_kw(Keyword::Join) {
+                    JoinKind::Inner
+                } else if self.eat_kw(Keyword::Inner) {
+                    self.expect_kw(Keyword::Join)?;
+                    JoinKind::Inner
+                } else if self.eat_kw(Keyword::Left) {
+                    self.eat_kw(Keyword::Outer);
+                    self.expect_kw(Keyword::Join)?;
+                    JoinKind::Left
+                } else {
+                    break;
+                };
+                let table = self.table_ref()?;
+                let on = if kind != JoinKind::Cross && self.eat_kw(Keyword::On) {
+                    Some(self.expr()?)
+                } else if kind == JoinKind::Left {
+                    return Err(self.unexpected("ON (LEFT JOIN needs a join condition)"));
+                } else {
+                    None
+                };
+                joins.push(Join { table, kind, on });
+            }
+        }
         let filter = if self.eat_kw(Keyword::Where) {
             Some(self.expr()?)
         } else {
@@ -266,6 +305,7 @@ impl Parser<'_> {
             distinct,
             items,
             from,
+            joins,
             filter,
             group_by,
             having,
@@ -273,6 +313,17 @@ impl Parser<'_> {
             limit,
             offset,
         })
+    }
+
+    /// `name [[AS] alias]`
+    fn table_ref(&mut self) -> Result<FromTable> {
+        let name = self.ident()?;
+        let alias = if self.eat_kw(Keyword::As) || matches!(self.peek(), Some(Token::Ident(_))) {
+            Some(self.ident()?)
+        } else {
+            None
+        };
+        Ok(FromTable { name, alias })
     }
 
     fn insert(&mut self) -> Result<Statement> {
@@ -728,12 +779,30 @@ mod tests {
         let Statement::Select(sel) = s else { panic!() };
         assert!(sel.distinct);
         assert_eq!(sel.items.len(), 3);
-        assert_eq!(sel.from.as_deref(), Some("t"));
+        assert_eq!(sel.from.as_ref().map(|f| f.name.as_str()), Some("t"));
         assert_eq!(sel.group_by.len(), 2);
         assert!(sel.having.is_some());
         assert_eq!(sel.order_by.len(), 2);
         assert!(!sel.order_by[0].asc);
         assert!(sel.limit.is_some() && sel.offset.is_some());
+    }
+
+    #[test]
+    fn joins() {
+        let Statement::Select(sel) = parse(
+            "SELECT u.*, o.total FROM users AS u JOIN orders o ON o.uid = u.id \
+             LEFT OUTER JOIN notes n ON n.uid = u.id, tags CROSS JOIN x",
+        )
+        .unwrap() else {
+            panic!()
+        };
+        assert_eq!(sel.items[0], SelectItem::TableWildcard("u".into()));
+        assert_eq!(sel.from.as_ref().unwrap().reference(), "u");
+        let kinds: Vec<JoinKind> = sel.joins.iter().map(|j| j.kind).collect();
+        assert_eq!(kinds, vec![JoinKind::Inner, JoinKind::Left, JoinKind::Cross, JoinKind::Cross]);
+        assert_eq!(sel.joins[0].table.reference(), "o");
+        assert!(sel.joins[1].on.is_some() && sel.joins[2].on.is_none());
+        assert!(parse("SELECT * FROM a LEFT JOIN b").is_err());
     }
 
     #[test]

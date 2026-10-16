@@ -737,6 +737,40 @@ an INTEGER key falls back to a scan). A real optimizer would estimate the
 cost of each option from statistics (Selinger et al., 1979); rule 4 can be
 slower than a full scan when the range covers most of the table.
 
+### Joins
+
+`FROM a JOIN b ON ... LEFT JOIN c ON ...` becomes a left-deep chain of
+nested-loop joins, in the order written:
+
+```text
+NestedLoopJoin LEFT JOIN i ON i.order_id = o.id
+  NestedLoopJoin JOIN o ON o.user_id = u.id
+    Scan users (full)
+    IndexLookup orders using orders_by_user (user_id = u.id)
+  IndexLookup items using items_by_order (order_id = o.id)
+```
+
+Rows are concatenations: the binder resolves `o.total` to "offset of
+`orders` in the row + position of `total`". Each table is referred to by its
+alias (or name), unqualified names must be unambiguous, and the same table
+needs two aliases to be joined with itself.
+
+For each left row the join needs the candidate right rows. The planner
+looks in ON for a conjunct `right.col = <expression over left tables>`:
+
+* `col` is the right table's primary key → one point lookup per left row;
+* `col` is the first column of an index → one index prefix scan;
+* otherwise the right table is read once into memory and every left row is
+  paired with every right row (a *block* nested loop with one big block).
+
+The full ON condition is then checked on each candidate pair, so lookups
+are again only an optimization. For `LEFT JOIN`, a left row with no passing
+candidate is emitted once, padded with NULLs; WHERE runs after the joins, so
+`LEFT JOIN o ... WHERE o.id IS NULL` finds rows *without* a match (an
+anti-join). Only the first table's access path uses WHERE (it is never the
+NULL-padded side). A differential test checks that the lookup and
+materialized strategies agree with a brute-force join in Rust.
+
 ### The Volcano executor
 
 Every operator implements `next() -> Option<Row>` and pulls from its child
@@ -745,6 +779,7 @@ Every operator implements `next() -> Option<Row>` and pulls from its child
 | operator    | behavior                                                   |
 |-------------|------------------------------------------------------------|
 | `Scan`      | B+tree cursor over the chosen key range, decodes rows      |
+| `Join`      | nested loop: lookup or materialized inner side, ON check   |
 | `Filter`    | passes rows whose predicate is TRUE (not FALSE or NULL)    |
 | `Project`   | evaluates the SELECT list                                  |
 | `Aggregate` | pipeline breaker: consumes input, emits one row per group  |
@@ -908,6 +943,7 @@ SQL → REPL → benchmarks.)
 | 25 | Secondary index entries `encode(cols) ++ pk -> pk` | Unique keys without duplicate support in the B+tree; prefix ranges for lookups | Duplicate keys with posting lists |
 | 26 | UPDATE removes all old index entries before inserting new ones | Statement-level (not row-level) UNIQUE checking, so swaps work | Deferred constraint checking |
 | 27 | Rule-based access path choice | Predictable, explainable with EXPLAIN | Cost-based with statistics |
+| 28 | Left-deep nested-loop joins in written order, with pk/index lookups or a materialized inner table | Simple, covers the common foreign-key join well | Hash join, join reordering |
 
 ---
 
@@ -918,9 +954,9 @@ Roughly in order of how much each would teach:
 1. **Covering index scans and multi-column index use**: answer a query
    from the index alone when it has every needed column; use equality on
    leading columns plus a range on the next.
-2. **Joins**: nested-loop join as a new operator, then index nested-loop
-   using the primary key, then hash join. The binder would need multi-table
-   scopes.
+2. **Hash joins and join ordering**: build a hash table on the smaller
+   input when there's no index; choose the join order by estimated size.
+   Subqueries and `UNION` would come next in the query language.
 3. **MVCC / snapshot isolation** so readers don't block the writer.
 4. **Streaming results**: return an iterator that holds the engine lock.
 5. **Slotted pages** and in-place node edits, prefix compression, suffix

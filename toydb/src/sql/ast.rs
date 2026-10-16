@@ -60,11 +60,45 @@ pub struct CreateIndex {
     pub if_not_exists: bool,
 }
 
+/// A table in a FROM clause, optionally renamed: `users AS u`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FromTable {
+    pub name: String,
+    pub alias: Option<String>,
+}
+
+impl FromTable {
+    /// The name columns are qualified with: the alias if any.
+    pub fn reference(&self) -> &str {
+        self.alias.as_deref().unwrap_or(&self.name)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JoinKind {
+    /// `a, b` or `a CROSS JOIN b`: every pair of rows.
+    Cross,
+    /// `a [INNER] JOIN b ON ...`: pairs satisfying the condition.
+    Inner,
+    /// `a LEFT [OUTER] JOIN b ON ...`: like INNER, plus left rows with no
+    /// match, padded with NULLs.
+    Left,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Join {
+    pub table: FromTable,
+    pub kind: JoinKind,
+    pub on: Option<Expr>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Select {
     pub distinct: bool,
     pub items: Vec<SelectItem>,
-    pub from: Option<String>,
+    pub from: Option<FromTable>,
+    /// Further tables joined to `from`, left to right.
+    pub joins: Vec<Join>,
     pub filter: Option<Expr>,
     pub group_by: Vec<Expr>,
     pub having: Option<Expr>,
@@ -77,6 +111,8 @@ pub struct Select {
 pub enum SelectItem {
     /// `*`
     Wildcard,
+    /// `t.*`
+    TableWildcard(String),
     /// `expr [AS alias]`
     Expr(Expr, Option<String>),
 }

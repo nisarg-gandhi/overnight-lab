@@ -31,10 +31,10 @@ long doc comment at the top explaining its design, and DESIGN.md goes deeper.
 | `storage/wal.rs` | write-ahead log, recovery, checkpoints | Database Logging; Database Recovery | Ch. 5 *Transaction Processing and Recovery* (recovery section) | [Write-Ahead Logging](https://sqlite.org/wal.html); [Atomic Commit In SQLite](https://sqlite.org/atomiccommit.html) |
 | `txn.rs`, `db.rs` | 2PL locks, sessions, savepoints | Concurrency Control Theory; Two-Phase Locking | Ch. 5 (concurrency control section) | [File Locking And Concurrency](https://sqlite.org/lockingv3.html); [Isolation In SQLite](https://sqlite.org/isolation.html) |
 | `types.rs` | row format, memcomparable keys | Database Storage II (tuple layout) | Ch. 3 (*Binary Encoding*) | [Database File Format](https://sqlite.org/fileformat2.html) §2.1 (record format) |
-| `catalog.rs` | self-hosted schema | Database Storage (system catalogs) | — | [Database File Format](https://sqlite.org/fileformat2.html) §2.6 (the schema table) |
+| `catalog.rs` | self-hosted schema, secondary indexes | Database Storage (system catalogs) | — | [Database File Format](https://sqlite.org/fileformat2.html) §2.6 (the schema table) |
 | `sql/lexer.rs`, `sql/parser.rs` | tokens, recursive descent | Modern SQL (for the language) | — | [SQL As Understood By SQLite](https://sqlite.org/lang.html) |
 | `sql/planner.rs` | binding, aggregation rewrite, access paths | Query Planning & Optimization | — | [The SQLite Query Optimizer Overview](https://sqlite.org/optoverview.html) |
-| `sql/exec.rs`, `sql/expr.rs` | Volcano iterators, aggregation, sorting | Query Execution; Sorting & Aggregation Algorithms | — | [Architecture of SQLite](https://sqlite.org/arch.html) (the VDBE, for contrast: bytecode instead of iterators) |
+| `sql/exec.rs`, `sql/expr.rs` | Volcano iterators, joins, aggregation, sorting | Query Execution; Join Algorithms; Sorting & Aggregation Algorithms | — | [Architecture of SQLite](https://sqlite.org/arch.html) (the VDBE, for contrast: bytecode instead of iterators) |
 
 ## Suggested path
 
@@ -58,7 +58,9 @@ long doc comment at the top explaining its design, and DESIGN.md goes deeper.
    see how the bank example's retry count changes.
 5. **Query processing.** CMU's query execution and planning lectures, then
    `sql/` in pipeline order: lexer → parser → planner → exec. Use `EXPLAIN`
-   constantly. Exercise: add a nested-loop join.
+   constantly. Exercises: add a hash join for joins without a usable
+   index; make the planner use an index's second column after an equality
+   on its first.
 
 ## Papers and other classics
 

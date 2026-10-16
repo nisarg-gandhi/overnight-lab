@@ -3,6 +3,7 @@
 -- or inside the shell with:  .read examples/demo.sql
 
 DROP TABLE IF EXISTS employees;
+DROP TABLE IF EXISTS projects;
 CREATE TABLE employees (
     id      INTEGER PRIMARY KEY,
     name    TEXT NOT NULL,
@@ -53,3 +54,11 @@ CREATE INDEX by_dept ON employees (dept);
 EXPLAIN SELECT name FROM employees WHERE dept = 'Research';
 SELECT name FROM employees WHERE dept = 'Research';
 .check
+
+-- Joins: the inner table is looked up through its primary key or an index
+CREATE TABLE projects (id INTEGER PRIMARY KEY, lead INTEGER, title TEXT);
+INSERT INTO projects VALUES (1, 1, 'Analytical Engine'), (2, 2, 'COBOL'), (3, 1, 'Notes'), (4, 99, 'Orphan');
+SELECT e.name, p.title FROM projects p JOIN employees e ON e.id = p.lead ORDER BY p.id;
+SELECT e.name, COUNT(p.id) AS projects FROM employees e LEFT JOIN projects p ON p.lead = e.id
+GROUP BY e.name ORDER BY projects DESC, e.name;
+EXPLAIN SELECT e.name, p.title FROM projects p JOIN employees e ON e.id = p.lead;

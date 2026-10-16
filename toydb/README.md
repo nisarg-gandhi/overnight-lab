@@ -124,6 +124,9 @@ Examples (`cargo run --example <name>`):
 * `INSERT INTO t [(cols)] VALUES (...), (...)`
 * `SELECT [DISTINCT] ... FROM t WHERE ... GROUP BY ... HAVING ...
   ORDER BY ... [ASC|DESC] LIMIT n OFFSET m`
+* Joins: `a, b`, `CROSS JOIN`, `[INNER] JOIN ... ON`, `LEFT [OUTER] JOIN
+  ... ON`, table aliases, `t.*`. Nested loops that look rows up through the
+  inner table's primary key or an index when the ON clause allows it.
 * `UPDATE t SET ... WHERE ...`, `DELETE FROM t WHERE ...`
 * `EXPLAIN <statement>`
 * Types: `INTEGER`, `REAL`, `TEXT`, `BOOLEAN` (+ `NULL`); constraints
@@ -142,7 +145,9 @@ Examples (`cargo run --example <name>`):
 toydb is a learning project; these are deliberate simplifications (see
 DESIGN.md for why and how each could be lifted):
 
-* **No joins or subqueries.** A query reads one table.
+* **No subqueries, `UNION`, `RIGHT`/`FULL` joins or hash joins.** Joins are
+  nested loops; without a usable key or index the inner table is copied
+  into memory once.
 * **Rule-based planning.** The planner picks an access path with fixed
   rules (primary key, then index equality, then ranges); there are no
   statistics or cost model, and only an index's first column is used.

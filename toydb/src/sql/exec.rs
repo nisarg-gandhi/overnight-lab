@@ -19,7 +19,7 @@ use std::ops::Bound;
 use super::ast::{CreateTable, Expr, Statement};
 use super::expr::{Accumulator, BExpr};
 use super::planner::{
-    choose_access, eval_const, plan_select, Access, AggCall, Binder, Plan, QueryPlan,
+    choose_access, eval_const, plan_select, Access, AggCall, Binder, JoinLookup, Plan, QueryPlan,
 };
 use crate::btree::{BTree, Cursor};
 use crate::catalog::{prefix_successor, Catalog, Table, SCHEMA_TABLE};
@@ -49,6 +49,18 @@ pub fn build(plan: Plan) -> Box<dyn Executor> {
     match plan {
         Plan::SingleRow => Box::new(SingleRowExec { done: false }),
         Plan::Scan { table, access } => Box::new(ScanExec::new(&table, access)),
+        Plan::Join { left, right, lookup, on, left_join, .. } => Box::new(JoinExec {
+            left: build(*left),
+            right,
+            lookup,
+            on,
+            left_join,
+            materialized: None,
+            current: None,
+            candidates: vec![],
+            pos: 0,
+            matched: false,
+        }),
         Plan::Filter { input, pred, .. } => Box::new(FilterExec { input: build(*input), pred }),
         Plan::Project { input, exprs, .. } => Box::new(ProjectExec { input: build(*input), exprs }),
         Plan::Aggregate { input, groups, aggs, .. } => Box::new(AggregateExec {
@@ -200,6 +212,101 @@ impl Executor for ScanExec {
         self.open(s)?;
         // Decode straight from the cursor's page copy: no key/value copies.
         self.cursor.as_mut().unwrap().next_with(s, |_, v| decode_row(v))
+    }
+}
+
+/// Nested-loop join. For each left row, the candidate right rows come from
+/// a primary-key/index lookup when the planner found one, or else from a
+/// copy of the whole right table read once on first use. Every candidate
+/// pair is checked against the full ON condition.
+struct JoinExec {
+    left: Box<dyn Executor>,
+    right: Table,
+    lookup: Option<JoinLookup>,
+    on: Option<BExpr>,
+    left_join: bool,
+    /// All rows of the right table (only without a lookup).
+    materialized: Option<Vec<Row>>,
+    /// The left row being joined, and its candidate right rows.
+    current: Option<Row>,
+    candidates: Vec<Row>,
+    pos: usize,
+    /// Did the current left row match anything? (for LEFT JOIN padding)
+    matched: bool,
+}
+
+impl JoinExec {
+    /// Right rows that might match `left`.
+    fn lookup_rows(&self, s: &mut dyn PageStore, lookup: &JoinLookup, left: &Row) -> Result<Vec<Row>> {
+        let col = match &lookup.index {
+            None => self.right.pk.expect("pk lookup on a table with a primary key"),
+            Some(ix) => ix.columns[0],
+        };
+        // Key encodings only match within a type, so convert like a stored
+        // value would be; NULL or an incomparable type can't match.
+        let Ok(key) = lookup.key.eval(left)?.coerce_to(self.right.columns[col].ty) else {
+            return Ok(vec![]);
+        };
+        if key.is_null() {
+            return Ok(vec![]);
+        }
+        let access = match &lookup.index {
+            None => Access::Key(key),
+            Some(ix) => Access::Index { index: ix.clone(), eq: Some(key), lo: Bound::Unbounded, hi: Bound::Unbounded },
+        };
+        let mut scan = ScanExec::new(&self.right, access);
+        let mut rows = vec![];
+        while let Some(r) = scan.next(s)? {
+            rows.push(r);
+        }
+        Ok(rows)
+    }
+}
+
+impl Executor for JoinExec {
+    fn next(&mut self, s: &mut dyn PageStore) -> Result<Option<Row>> {
+        loop {
+            let Some(left) = &self.current else {
+                // Advance to the next left row.
+                let Some(left) = self.left.next(s)? else { return Ok(None) };
+                if let Some(lookup) = &self.lookup {
+                    self.candidates = self.lookup_rows(s, lookup, &left)?;
+                } else if self.materialized.is_none() {
+                    let mut scan = ScanExec::new(&self.right, Access::Full);
+                    let mut rows = vec![];
+                    while let Some(r) = scan.next(s)? {
+                        rows.push(r);
+                    }
+                    self.materialized = Some(rows);
+                }
+                self.current = Some(left);
+                self.pos = 0;
+                self.matched = false;
+                continue;
+            };
+            let right_rows = match &self.materialized {
+                Some(rows) if self.lookup.is_none() => rows,
+                _ => &self.candidates,
+            };
+            if let Some(right) = right_rows.get(self.pos) {
+                self.pos += 1;
+                let mut row = Vec::with_capacity(left.len() + right.len());
+                row.extend_from_slice(left);
+                row.extend_from_slice(right);
+                if self.on.as_ref().map_or(Ok(true), |on| on.matches(&row))? {
+                    self.matched = true;
+                    return Ok(Some(row));
+                }
+                continue;
+            }
+            // Candidates exhausted.
+            let left = self.current.take().unwrap();
+            if self.left_join && !self.matched {
+                let mut row = left;
+                row.extend(std::iter::repeat_n(Value::Null, self.right.columns.len()));
+                return Ok(Some(row));
+            }
+        }
     }
 }
 
@@ -442,7 +549,7 @@ impl Engine {
                 let t = self.catalog()?.get(table)?.clone();
                 let verb = if matches!(stmt, Statement::Update { .. }) { "Update" } else { "Delete" };
                 let mut plan = Plan::Scan {
-                    access: choose_access(&t, filter.as_ref()),
+                    access: choose_access(&t, &t.name, filter.as_ref()),
                     table: t.clone(),
                 };
                 if let Some(f) = filter {
@@ -571,7 +678,7 @@ impl Engine {
         let pred = filter
             .map(|f| Binder::new(Some(table), "WHERE").bind(f))
             .transpose()?;
-        let mut scan = ScanExec::new(table, choose_access(table, filter));
+        let mut scan = ScanExec::new(table, choose_access(table, &table.name, filter));
         let mut out = vec![];
         while let Some((k, row)) = scan.next_entry(&mut self.storage)? {
             if pred.as_ref().map_or(Ok(true), |p| p.matches(&row))? {
