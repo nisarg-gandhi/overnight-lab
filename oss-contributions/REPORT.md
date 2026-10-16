@@ -11,6 +11,7 @@ Files in this folder:
 | `REPORT.md` | This report: ranking, shortlist deep-dives, roadmap, etiquette, programs |
 | `candidates.csv` | All 72 candidate repos with every metric and sub-score |
 | `issues.md` | Flat checklist of every recommended issue |
+| `SETUP_GOTCHAS.md` | Results of actually building and testing pandas, scikit-learn and matplotlib, and the pitfalls hit |
 | `data/` | Raw inputs and the scripts that produce `candidates.csv` (`git_activity.py`, `score.py`, `raw/verified.md` per-issue notes) |
 
 ---
@@ -95,7 +96,7 @@ The shortlist adds one more filter: **a repo needs at least 2 (ideally at least 
 
 ## Shortlist deep-dives
 
-A shared note for the setup sections: the C-extension projects (pandas, scikit-learn, matplotlib, numpy) build with **meson** and need a C/C++ compiler. On Linux, `sudo apt install build-essential` is enough. On Windows, use WSL2. Always work in a fresh virtual environment (`python -m venv .venv` or conda/mamba).
+A shared note for the setup sections: the C-extension projects (pandas, scikit-learn, matplotlib, numpy) build with **meson** and need a C/C++ compiler. On Linux, `sudo apt install build-essential` is enough. On Windows, use WSL2. Always work in a fresh virtual environment (`python -m venv .venv` or conda/mamba). **Read `SETUP_GOTCHAS.md` before building pandas, scikit-learn or matplotlib**: they were built and fully tested for this report, and it lists the pitfalls (shallow clones without tags, build-time downloads, tzdata-legacy, pip ≥ 25.1).
 
 ### 1. pandas-dev/pandas (Tier 1, score 90.0)
 
@@ -153,7 +154,8 @@ pre-commit install
 ```bash
 git clone https://github.com/<you>/matplotlib && cd matplotlib
 python -m venv .venv && source .venv/bin/activate
-python -m pip install -r requirements/dev/dev-requirements.txt
+python -m pip install -U pip                     # pip >= 25.1 needed for dependency groups
+python -m pip install --group build --group test
 python -m pip install --verbose --no-build-isolation --editable .
 pytest lib/matplotlib/tests/test_patches.py -q
 pre-commit install
