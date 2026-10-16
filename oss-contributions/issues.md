@@ -84,4 +84,4 @@ Before starting any of them: re-check that the issue is still free, then claim i
 - [ ] [#2405](https://github.com/marimo-team/marimo/issues/2405) Medium (TS): "Copy as Altair chart" for data_explorer
 - [ ] [#3825](https://github.com/marimo-team/marimo/issues/3825) Medium (TS): persist collapsed headings ⚠️ (waiting on scope)
 
-**Total: 45 issues across 14 repos** (34 with no caveat, 11 marked ⚠️).
+**Total: 44 issues across 14 repos** (33 with no caveat, 11 marked ⚠️).

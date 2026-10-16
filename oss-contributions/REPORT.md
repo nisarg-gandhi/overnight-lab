@@ -163,7 +163,7 @@ pre-commit install
 | Issue | Difficulty | Attack plan |
 |---|---|---|
 | [#30165](https://github.com/matplotlib/matplotlib/issues/30165): `Ellipse.get_vertices` + `get_transform` applies patch transform twice | Easy | Do what maintainer rcomer proposed: clarify the `Patch.get_transform` docstring in `lib/matplotlib/patches.py` and cross-reference `get_data_transform`. Optionally add a sentence to `get_vertices`. Docs-only PR. |
-| [#28745](https://github.com/matplotlib/matplotlib/issues/28745): document `linestyle` as an `:mpltype:` | Easy–Med | Add a linestyle table to `_docstring.interpd`, register the target in `doc/sphinxext/` roles, and replace hand-written linestyle descriptions. Someone asked in March 2026 but never followed up, so comment before you start. |
+| [#28745](https://github.com/matplotlib/matplotlib/issues/28745): document `linestyle` as an `:mpltype:` | Easy–Med | Add a linestyle table to `_docstring.interpd`, register the link target in `lib/matplotlib/sphinxext/roles.py`, and replace hand-written linestyle descriptions. Someone asked in March 2026 but never followed up, so comment before you start. |
 | [#31809](https://github.com/matplotlib/matplotlib/issues/31809): ipympl: `figure.canvas.manager` becomes None after repeated `hist` calls | Medium | Install `ipympl` + Jupyter and reproduce the exact sequence. Instrument `pyplot._pylab_helpers.Gcf` (destroy/del paths) to find who de-registers the figure. tacaswell's hint: check `type(fig.canvas)` before and after. Post findings before coding. |
 
 ### 4. secdev/scapy (Tier 1, score 84.6 — best networking fit)
