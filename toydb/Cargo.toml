@@ -1,0 +1,24 @@
+[package]
+name = "toydb"
+version = "0.1.0"
+edition = "2021"
+description = "A small but real embedded SQL database, written from scratch as a learning project"
+license = "MIT"
+readme = "README.md"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "toydb"
+path = "src/bin/toydb.rs"
+
+# The library itself has zero dependencies. Dev-dependencies are used only for
+# property tests and for the SQLite comparison benchmark.
+[dependencies]
+
+[dev-dependencies]
+proptest = "1"
+
+[profile.test]
+opt-level = 1
