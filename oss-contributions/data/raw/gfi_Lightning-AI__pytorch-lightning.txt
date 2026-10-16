@@ -1,0 +1,6 @@
+total 97 (newest labeled 2025-05; mostly 'help wanted' bugs needing repro)
+20502 | Make logging_mode (on_step or on_epoch) available to loggers | feature, help wanted | 5 | 2024-12-17
+20153 | Confusing recommendation to use sync_dist=True even with TorchMetrics | bug, help wanted, logging | 17 | 2024-08-02
+20052 | trainer.test() with given checkpoint logs last epoch instead of checkpoint epoch | bug, help wanted, repro needed | 1 | 2024-07-05
+20046 | ModelCheckpoint could not find key in returned metrics | bug, help wanted, checkpoint | 4 | 2024-07-04
+19964 | Documentation: writing custom samplers compatible with multi GPU training | help wanted, docs | 2 | 2024-06-10

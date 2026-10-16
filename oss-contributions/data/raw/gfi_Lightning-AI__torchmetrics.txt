@@ -1,0 +1,9 @@
+total 38
+3575 | Perplexity returns inf in float16 when one update sums many tokens (follow-up to #3537) | bug / fix, help wanted | 1 | 2026-10-12
+3512 | ConcordanceCorrCoef mixes (n-1) variances with a 1/n mean term, so it does not match Lin's CCC | bug / fix, help wanted | 1 | 2026-09-24
+3460 | Functional nominal metrics raise RuntimeError when category labels do not start at 0 | bug / fix, help wanted | 1 | 2026-08-17
+3439 | Dependency resolving to the latest torchmetrics | bug / fix, help wanted | 2 | 2026-07-30
+3434 | nan_stategy=disable dropping weights | bug / fix, help wanted | 1 | 2026-07-23
+3413 | Interpolation bug for macro-averaged multiclass precision-recall curves | bug / fix, help wanted | 4 | 2026-06-12
+3403 | RetrievalPrecisionRecallCurve plot labels precision as False Positive Rate | bug / fix, help wanted | 3 | 2026-06-02
+3393 | Slash-command workflows are non-functional | bug / fix, help wanted | 0 | 2026-05-21

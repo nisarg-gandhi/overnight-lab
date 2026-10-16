@@ -1,0 +1,73 @@
+repo,gfi_unassigned,pr_merged_6m,pr_total_6m,issues_nocomment,issues_total,note
+pytorch/pytorch,31,5500,10782,314,1249,merged counted via 'Merged' label (ghstack)
+Lightning-AI/pytorch-lightning,97,61,179,7,20,
+Lightning-AI/torchmetrics,38,17,80,,,
+pytorch/vision,0,57,112,,,
+pytorch/ignite,22,31,72,,,labeled issues mostly 2021-2023
+huggingface/transformers,25,1055,2016,,,only Good Second Issue left unassigned
+huggingface/datasets,7,81,282,,,only old good-second-issue
+huggingface/diffusers,67,372,746,,,contributions-welcome label used
+huggingface/peft,1,202,318,,,only 1 meta issue labeled; maintainer very responsive (BenjaminBossan)
+huggingface/accelerate,0,53,126,,,
+huggingface/trl,0,689,1038,,,
+huggingface/huggingface_hub,1,315,437,,,only docs-translation meta issue
+scikit-learn/scikit-learn,176,396,764,,,
+jax-ml/jax,29,2055,2791,,,labels mostly 2023 'contributions welcome'
+google/flax,0,48,101,,,
+patrick-kidger/equinox,NA,22,31,,,single-maintainer project
+optuna/optuna,0,115,144,,,
+mlflow/mlflow,61,1317,2053,,,many have has-closing-pr
+keras-team/keras,2,373,556,,,
+sktime/sktime,194,327,668,,,very active GFI pipeline
+aeon-toolkit/aeon,0,181,245,,,
+unit8co/darts,18,68,91,,,
+pyg-team/pytorch_geometric,NA,27,83,,,low maintainer activity 2026
+kornia/kornia,11,173,211,,,
+pymc-devs/pymc,53,53,111,,,
+explosion/spaCy,NA,1,21,,,near-dormant: 1 of 21 PRs merged
+deepchem/deepchem,NA,18,107,,,low merge rate
+langchain-ai/langchain,3,896,2053,,,
+run-llama/llama_index,3,154,1014,,,15% merge rate - flooded with PRs
+BerriAI/litellm,0,3708,8909,,,huge PR volume
+pydantic/pydantic-ai,0,841,1546,,,
+microsoft/autogen,NA,0,266,,,maintenance mode - 0 PRs merged (superseded by Microsoft Agent Framework)
+vllm-project/vllm,12,4388,9941,,,GPU-heavy; issues advanced
+stanfordnlp/dspy,0,209,502,,,no beginner labels; 'enhancement' issues only
+huggingface/smolagents,NA,15,341,,,4% merge rate - effectively stalled
+deepset-ai/haystack,0,874,1064,,,uses 'Contributions wanted!' label - none unassigned now
+567-labs/instructor,NA,22,202,,,11% merge rate
+pandas-dev/pandas,150,864,1285,,,count = Docs/Testing/Needs Tests labels (pandas rarely uses GFI)
+pola-rs/polars,4,709,990,,,core is Rust; 192 'accepted' bugs
+duckdb/duckdb-python,NA,86,123,,,C++ binding work
+ibis-project/ibis,0,28,69,,,slowed down (41% merge)
+narwhals-dev/narwhals,4,185,232,,,80% merge rate; very newcomer-friendly maintainers
+pydata/xarray,59,83,162,,,uses contrib-good-first-issue label
+dask/dask,20,90,173,,,GFIs mostly old
+marimo-team/marimo,14,728,931,,,python + typescript GFIs
+unionai-oss/pandera,22,77,109,,,GFIs old
+Textualize/textual,0,17,118,,,14% merge rate
+Textualize/rich,NA,1,74,,,near-dormant for external PRs
+fastapi/typer,NA,119,178,,,merged count dominated by bots/maintainer
+pytest-dev/pytest,25,219,388,,,
+pylint-dev/pylint,366,181,246,,,'Needs PR' label = help wanted (366); only 4 'Good first issue'
+python/mypy,9,266,417,,,
+pypa/hatch,NA,47,115,,,
+astral-sh/ruff,15,1815,2751,,,Rust codebase
+secdev/scapy,10,74,104,,,
+encode/httpx,NA,0,0,,,no PRs in window (PRs restricted / repo frozen)
+aio-libs/aiohttp,1,811,955,,,merged count inflated by dependabot backports
+urllib3/urllib3,2,53,170,,,'Contributor Friendly' issues with bounties (old)
+psf/requests,NA,52,185,,,feature-frozen
+mitmproxy/mitmproxy,19,76,141,,,160 open feature requests (kind/feature)
+rthalley/dnspython,NA,17,21,,,small single-maintainer project
+ktbyers/netmiko,NA,22,32,,,single-maintainer; device-specific drivers
+netbox-community/netbox,15,404,440,,,'status: needs owner' workflow; must be assigned before PR
+fastapi/fastapi,NA,329,641,,,most PRs are doc translations
+zulip/zulip,56,464,822,,,help-wanted issues have 20-47 comments (heavily contested)
+sympy/sympy,49,140,430,,,33% merge rate; many Easy-to-Fix issues old
+networkx/networkx,4,94,194,,,uses 'Sprint' label; issues old
+napari/napari,0,276,357,,,
+scikit-image/scikit-image,0,50,109,,,
+matplotlib/matplotlib,56,389,551,,,uses 'first-contribution' label; count = confirmed bugs unassigned
+mesa/mesa,0,50,74,,,(projectmesa/mesa redirects to mesa/mesa)
+numpy/numpy,8,617,864,,,'sprintable' issues mostly old

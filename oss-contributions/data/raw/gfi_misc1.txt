@@ -1,0 +1,130 @@
+## pytorch/ignite total 22
+2977 | Problem with using "mps" device | enhancement, help wanted, distributed | 5 | 2023-06-29
+2752 | Support for TorchSnapshot for checkpoint saving/loading | enhancement, help wanted | 3 | 2022-10-24
+2631 | Implementation of RecSys Metrics | enhancement, help wanted | 14 | 2022-07-23
+2026 | Everyone is welcome to contribute | help wanted, good first issue | 50 | 2021-06-02
+1992 | Debug mode for ignite | enhancement, help wanted | 15 | 2021-05-07
+## huggingface/transformers total 25
+42758 | Add support for Microsoft VibeVoice models | New model, Good Second Issue | 6 | 2025-12-10
+40042 | Support loading glm4moe GGUF | Good Second Issue, Feature request | 9 | 2025-08-08
+39753 | Inv frequency has no default | Good Second Issue | 8 | 2025-07-29
+36119 | Adapting Whisper to the new loss_function attribute | Good Second Issue | 11 | 2025-02-10
+34571 | Configure stop_strings in generation_config.json | Good Second Issue, Generation | 8 | 2024-11-02
+33664 | Object detection fine-tuning for Owl-vit/Owlv2 | Good Second Issue, Vision | 16 | 2024-09-23
+## huggingface/datasets total 7 (all 2020-2023, good second issue)
+6013 | map should reuse unchanged columns to avoid disk usage | good second issue | 3 | 2023-07-10
+5380 | Improve dataset .skip() speed in streaming mode | good second issue | 14 | 2022-12-20
+4911 | [Tests] Ensure datasets supports renamed repositories | good second issue | 2 | 2022-08-29
+## huggingface/diffusers total 67
+14730 | [modular] move unpack out of the decoder blocks for flux, krea2 and ltx | contributions-welcome | 3 | 2026-09-07
+12760 | StateManager/Hook/State: missing context setting (cond or uncond) in pipelines | stale, contributions-welcome | 6 | 2025-12-01
+12589 | implement TeaCache | contributions-welcome, performance | 13 | 2025-11-04
+12568 | Context parallel bug when using QwenImage | Good second issue, contributions-welcome | 8 | 2025-11-01
+12257 | support Wan 2.2 S2V | help wanted, Good second issue | 7 | 2025-08-29
+## scikit-learn total 176 (good first issue/help wanted/Easy)
+34807 | Dual problem formulation approach is not mentioned in Ridge solvers | Easy, Documentation | 13 | 2026-08-24
+29521 | NDCG in case of absence of relevant items | Bug, help wanted | 8 | 2024-07-19
+31554 | Allow batch based metrics calculation | help wanted, Needs Investigation | 23 | 2025-06-16
+33958 | META: Use narwhals in codebase | Meta-issue | 0 | 2026-05-09
+33457 | META track sample_weight support for all estimators | Meta-issue | 1 | 2026-03-04
+## jax total 29 (mostly 2023)
+20293 | Support profiling without source code changes | good first issue | 18 | 2024-03-18
+17540 | Low pass filters - Butterworth filter | contributions welcome | 4 | 2023-09-11
+14612 | Deal with NaN errors in jax.experimental.ode.optimal_step_size() | contributions welcome | 0 | 2023-02-21
+## mlflow total 61
+20703 | Artifacts (plots) not scaled to parent frame in comparison view | bug, good first issue, area/uiux, has-closing-pr | 22 | 2026-02-10
+17387 | SHAP plots in ShapEvaluator trigger FutureWarning about NumPy global RNG | bug, help wanted, has-closing-pr | 3 | 2025-08-25
+16892 | Event & Stage Logging with Timeline Annotations | enhancement, help wanted | 8 | 2025-07-25
+## sktime total 194
+11495 | test_trend is failing, likely pandas 3 related | bug, good first issue | 0 | 2026-10-16
+11388 | add test that fit/predict has no side effects on global numpy random seed | good first issue, module:tests | 8 | 2026-10-04
+11329 | Poor performance of global recursive reduction forecasters on panel data | bug, good first issue | 3 | 2026-09-28
+11286 | enable chained datatypes conversions through BaseConverter API | good first issue | 2 | 2026-09-23
+11285 | migrate datatypes conversions to BaseConverter API | good first issue | 3 | 2026-09-23
+11257 | investigate failure of test_load_model_from_disk | bug, good first issue | 1 | 2026-09-22
+11245 | restrict generous _update logic for forecasters | good first issue | 11 | 2026-09-21
+## darts total 18
+3051 | Add save() and load() methods to KMeansScorer | feature request, good first issue | 8 | 2026-03-30
+3006 | Improve handling & documentation of encoders and categorical static covariates in fit_from_dataset() | good first issue, documentation | 3 | 2026-02-04
+2438 | Passing kwargs to the underlying fitting function | good first issue, pr_welcome | 5 | 2024-07-02
+1649 | Retrieve last hidden state for RNNModel and BlockRNNModel | good first issue | 3 | 2023-03-16
+## kornia total 11
+6024 | torch.export of AugmentationSequential with integer-size Resize/LongestMaxSize fails in shape tracking | bug, help wanted | 0 | 2026-10-16
+6016 | HyNet(pretrained=True, is_bias_FRN=False) silently ignores trained FRN biases | bug, help wanted | 1 | 2026-10-16
+6015 | KeyNet with a non-default num_filters crashes in forward | bug, help wanted | 1 | 2026-10-16
+5982 | float16 image_histogram2d counts overflow to inf | bug, help wanted | 1 | 2026-10-15
+3752 | adding SANDesc descriptor | help wanted | 7 | 2026-06-15
+## pymc total 53 (label 'beginner friendly')
+8259 | Use Scalar op property for monotonic increasing/decreasing instead of redefining them | beginner friendly, maintenance | 10 | 2026-04-22
+8106 | Deprecation warning from cachetools v7 | help wanted, dependencies | 5 | 2026-02-11
+8042 | Use pack and unpack in join_nonshared_inputs | beginner friendly, maintenance | 7 | 2026-01-07
+8035 | Get rid of seeded_test fixture | beginner friendly | 7 | 2026-01-05
+7891 | Check idata dims/coords for consistency before sampling begins | beginner friendly, help wanted | 11 | 2025-08-08
+## pandas (Docs/Testing labels) total 150
+71163 | DOC: document pd.Index.to_flat_index | Docs, Needs Discussion | 4 | 2026-10-14
+70457 | DOC: Fix docs signature for various offset constructors | Docs, Frequency | 14 | 2026-10-05
+63608 | DOC: document BaseMaskedDtype.from_numpy_dtype | Docs | 6 | 2026-01-08
+64528 | ENH: Check type of objects in assert_series_equal | Testing | 5 | 2026-03-11
+## llama_index total 3
+23339 | RankLLMRerank cannot be imported without vllm installed | bug, good first issue | 2 | 2026-10-02
+## vllm total 12 (all advanced)
+31624 | ModelOpt Llama-4 checkpoints take 5+ minutes to load | good first issue | 25 | 2026-01-02
+## polars GFI total 4
+29641 | Incorrect CSV for decimal_comma and float_scientific | bug, good first issue, accepted | 5 | 2026-09-29
+26290 | scan_delta file skip predicate not working for bool dtype | good first issue, python | 8 | 2026-01-26
+21898 | pl.datetime needs a way to fail silently | bug, good first issue, python | 12 | 2025-03-23
+19266 | Add add_filename to pl.read_csv | good first issue, enhancement | 9 | 2024-10-16
+## narwhals total 4
+3221 | tests: Move from assert_equal_data to assert_frame_equal | help wanted, tests | 7 | 2025-10-18
+2203 | enh: Expr.filter for spark-like backends | help wanted, pyspark | 3 | 2025-03-14
+1410 | chore: find a way to type-check and lint docstrings | help wanted | 2 | 2024-11-20
+## xarray total 59
+11721 | Tracking: open deprecations | contrib-help-wanted, contrib-good-first-issue | 3 | 2026-10-13
+11527 | change subset of values of Dataset variable from pandas DataFrame with pandas v3 | bug, contrib-good-first-issue | 1 | 2026-08-15
+11514 | DataTree constructor error message says dict even though dict is not accepted | bug, contrib-good-first-issue | 1 | 2026-08-12
+11300 | .idxmax() fails if coordinates are intervals | bug, contrib-good-first-issue, regression | 1 | 2026-04-16
+10911 | Maximum value not always included in pcolormesh output when levels requested | bug, contrib-help-wanted, plotting | 2 | 2025-11-12
+10537 | A better gallery | contrib-help-wanted, documentation | 8 | 2025-07-15
+## marimo total 14
+11176 | is_url rejects valid URLs with single-digit ports | bug, good first issue | 2 | 2026-10-11
+9558 | feat(duckdb): support quack protocol | help wanted | 2 | 2026-05-15
+5975 | listing available models from openai-compatible providers when configuring AI | help wanted | 1 | 2025-08-09
+6076 | Static HTML export with dynamic mo.ui.tabs | help wanted | 1 | 2025-08-19
+## pylint Needs PR total 366
+11412 | Wrong inference for generators | False Positive, Needs PR | 0 | 2026-09-11
+11353 | False positive reimported related to import alias to avoid name clash | False Positive, Needs PR | 1 | 2026-08-27
+11202 | Missing inference for slash-joining pathlib paths | False Negative, Needs PR | 1 | 2026-07-28
+10737 | Backslashes don't properly render in docs | Documentation, Needs PR | 2 | 2025-11-10
+10731 | False Negative no-value-for-parameter for instances used inside a class | False Negative, Needs PR | 1 | 2025-11-10
+10630 | Extend W0102 dangerous-default-value to include os.getenv and os.environ | Enhancement, Needs PR | 1 | 2025-10-09
+## pytest help wanted total 25
+12276 | With 8.2.0, attempt to import docs from niece module fails | help wanted, regression | 1 | 2024-04-30
+10821 | Unexpected skip of entire module when calling unittest.skip("a")("b") | bug, help wanted | 1 | 2023-03-16
+## mypy good-first-issue total 9
+19660 | Cannot instantiate type "Type[None]" | bug, good-first-issue | 7 | 2025-08-14
+18124 | await-not-async missed & false alarms with genexp and list comprehensions | bug, good-first-issue | 5 | 2024-11-07
+9599 | Stubgen skips "vendor" directory | bug, good-first-issue, stubgen | 3 | 2020-10-15
+8874 | Generate better error message for incompatible **kwargs | good-first-issue, usability | 11 | 2020-05-22
+7314 | PEP 572: Test interaction with --allow-redefinition | good-first-issue, tests | 4 | 2019-08-10
+## scapy (help wanted/enhancement) total 10
+4739 | Provide a diff feature that refines packet comparison | enhancement, help wanted | 4 | 2025-05-09
+4680 | Add way to specify snapshot length and buffer size when using pcap | enhancement | 1 | 2025-03-01
+4513 | IPOptions_Timestamp does not support multiple IP Address and Timestamp fields | enhancement | 0 | 2024-08-30
+4343 | RFE: support for the DHCP "option overload" option | enhancement | 0 | 2024-04-01
+3625 | Add support for PIM Register and Register Stop messages in scapy.contrib.pim | enhancement | 0 | 2022-05-26
+## netbox needs owner total 15
+23412 | Pepper String in configuration.py should be raw string | documentation, needs owner | 0 | 2026-10-16
+23248 | Add object tags to search results | feature, needs owner, complexity: low | 0 | 2026-09-29
+23237 | Related Objects in Custom Fields are not clickable | bug, needs owner, severity: low | 0 | 2026-09-25
+23398 | handle_protectederror() lists dependent objects without object-level view permissions | bug, needs owner, severity low | 0 | 2026-10-14
+23357 | Skip unchanged cable termination assignments | needs owner, complexity: medium, performance | 0 | 2026-10-08
+## mitmproxy help wanted total 19
+5696 | Add individual exit codes for different errors | kind/feature, help wanted | 15 | 2022-10-30
+6888 | Windows MSI installer does not clear old ARP entries | help wanted, windows | 0 | 2024-06-01
+8283 | add optional decompression for content-type: application/zlib | kind/feature | 2 | 2026-06-13
+8286 | Add on-the-fly compression support for --save-stream-file | kind/feature | 4 | 2026-06-20
+## matplotlib (confirmed bug / first-contribution) total 56
+32269 | tripcolor shading="gouraud" streaks on macOS arm64 | confirmed bug, first-contribution | 13 | 2026-08-31
+32076 | SubFigure hspace=None incorrectly applies default vertical spacing when wspace is specified | confirmed bug, first-contribution | 3 | 2026-07-20
+32454 | Enum value Qt::AA_UseHighDpiPixmaps is marked deprecated | confirmed bug, GUI: Qt | 1 | 2026-10-09
+31147 | Initial save ignores text in a figure with constrained layout | confirmed bug | 5 | 2026-02-13

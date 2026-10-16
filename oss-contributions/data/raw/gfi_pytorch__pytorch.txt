@@ -1,0 +1,10 @@
+total 31
+158968 | foreach_map enhancements | good first issue, oncall: pt2, inductor, dynamo, internal ramp-up task | 18 | 2025-07-23
+153669 | Make tlparse able to show a summary of distinct graph breaks | good first issue, dynamo, compile ux | 18 | 2025-05-15
+153410 | torch.export .save/.load could support safetensors and/or weights_only=True | good first issue, export | 19 | 2025-05-12
+135859 | bmm, topk, cholesky, linalg.norm, max with out variants causing recompilations | good first issue, dynamic shapes | 15 | 2024-09-12
+130861 | torch.fx.Tracer.record_stack_traces is broken in torch 2.4.0 | good first issue, export | 6 | 2024-07-16
+121587 | Add clearer docs for torch.distributed.<OP> vs torch.distributed.nn.<OP> | docs, good first issue, distributed | 6 | 2024-03-09
+119856 | Timeout for process termination upon SIGTERM should be configurable | good first issue, distributed | 5 | 2024-02-14
+108744 | switch more test cases to use MultithreadTestCase | good first issue, dtensor | 5 | 2023-09-07
+106571 | Enable more flake8-bugbear lints | good first issue, lint | 21 | 2023-08-03
