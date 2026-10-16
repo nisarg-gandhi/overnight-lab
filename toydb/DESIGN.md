@@ -19,7 +19,7 @@ Contents
 9. [The catalog and secondary indexes](#9-the-catalog-and-secondary-indexes)
 10. [The query pipeline](#10-the-query-pipeline)
 11. [Testing strategy](#11-testing-strategy)
-12. [Benchmarks](#benchmarks)
+12. [Benchmarks](#12-benchmarks)
 13. [Decision log](#13-decision-log)
 14. [Limitations and where to go next](#14-limitations-and-where-to-go-next)
 
@@ -36,9 +36,9 @@ Contents
    │ sql/lexer.rs   tokens            │
    │ sql/parser.rs  AST               │  recursive descent
    │ sql/planner.rs physical plan     │  binding, aggregates, access paths
-   │ sql/exec.rs    Volcano iterators │  scan/filter/project/sort/aggregate
+   │ sql/exec.rs    Volcano iterators │  scan/join/filter/sort/aggregate
    ├──────────────────────────────────┤
-   │ catalog.rs   toydb_schema table  │  table definitions as SQL text
+   │ catalog.rs   toydb_schema table  │  schema as SQL text; index upkeep
    │ types.rs     values & encodings  │  row format, order-preserving keys
    ├──────────────────────────────────┤        ┌────────────────────────┐
    │ btree/       B+tree              │        │ txn.rs  LockManager    │
@@ -847,7 +847,7 @@ can't detect a missing fsync isn't testing durability.
 
 ---
 
-## Benchmarks
+## 12. Benchmarks
 
 `toydb/bench` is a separate crate (so the main crate's tests never compile
 SQLite) that runs the same workloads on toydb and on SQLite through
@@ -866,27 +866,30 @@ rows; numbers vary ±30% between runs, so read the ratios, not the digits):
 
 | workload                                         |        toydb |       sqlite |    ratio |
 |--------------------------------------------------|--------------|--------------|----------|
-| insert 20000 rows, sequential keys, 1 txn        |    9.3 µs/op |    1.3 µs/op |     7.0x |
-| insert 20000 rows, random keys, 1 txn            |    7.7 µs/op |    2.5 µs/op |     3.1x |
-| 10000 point lookups by primary key               |    4.6 µs/op |    3.9 µs/op |     1.2x |
-| 500 range scans of 100 rows                      |   42.5 µs/op |   11.4 µs/op |     3.7x |
-| 20 full scans with filter + aggregate            |   4.09 ms/op |   1.03 ms/op |     4.0x |
-| 10 GROUP BY + ORDER BY queries                   |   5.31 ms/op |   4.38 ms/op |     1.2x |
-| update 10000 rows by range, 1 txn                |    3.5 µs/op |    0.4 µs/op |     9.7x |
-| 200 single-row autocommit inserts (fsync each)   |  345.3 µs/op |  324.0 µs/op |     1.1x |
-| delete 10000 rows, 1 txn                         |    6.5 µs/op |    0.1 µs/op |    46.4x |
+| insert 20000 rows, sequential keys, 1 txn        |    8.0 µs/op |    1.2 µs/op |     6.5x |
+| insert 20000 rows, random keys, 1 txn            |    8.1 µs/op |    2.5 µs/op |     3.3x |
+| 10000 point lookups by primary key               |    4.7 µs/op |    4.0 µs/op |     1.2x |
+| 500 range scans of 100 rows                      |   43.5 µs/op |   10.8 µs/op |     4.0x |
+| 20 full scans with filter + aggregate            |   4.16 ms/op |  887.0 µs/op |     4.7x |
+| 10 GROUP BY + ORDER BY queries                   |   5.54 ms/op |   3.95 ms/op |     1.4x |
+| 20 joins of 1000 rows via primary key            |   1.24 ms/op |  101.8 µs/op |    12.2x |
+| update 10000 rows by range, 1 txn                |    3.8 µs/op |    0.3 µs/op |    11.2x |
+| 200 single-row autocommit inserts (fsync each)   |  434.0 µs/op |  316.7 µs/op |     1.4x |
+| delete 10000 rows, 1 txn                         |    6.5 µs/op |    0.1 µs/op |    44.3x |
 
 How to read this:
 
-* **Durable commits cost the same** (1.1×): a small autocommit transaction
+* **Durable commits cost about the same** (1.1–1.4×): a small autocommit transaction
   is dominated by the fsync, and both engines do exactly one.
-* **Point lookups and GROUP BY are close** (1.2×): per-statement overhead
+* **Point lookups and GROUP BY are close** (1.2–1.4×): per-statement overhead
   (parsing, planning, locking) and the hash/sort work dominate, and toydb's
   lookup path reads pages in place without decoding them.
-* **Scans are ~4× slower**: toydb's executor allocates — every row is
+* **Scans are ~4–5× slower, joins ~12×**: toydb's executor allocates — every row is
   decoded into a `Vec<Value>` with owned `String`s, and expression evaluation
   clones values. SQLite's bytecode VM reads columns lazily straight from the
-  page. Lazy column decoding and borrowing values would close much of this.
+  page. A join row additionally pays for a B+tree descent, a decoded inner
+  row and a concatenated output row per match. Lazy column decoding and
+  borrowing values would close much of this.
 * **Bulk writes are 3–45× slower**: every B+tree modification decodes the
   leaf into a `Node`, edits `Vec`s and re-encodes the whole page, and each
   statement also snapshots page pre-images for its savepoint. SQLite edits
@@ -905,6 +908,8 @@ Two profiling-driven optimizations were made while building the benchmark
    slices to the scan, which decodes rows directly from them; ungrouped
    aggregates skip the group map; `LIKE` on ASCII strings no longer
    allocates. Full scans got ~2× faster.
+3. Primary-key point access (including join lookups) calls `BTree::get`
+   instead of opening a range cursor, which would copy a whole leaf.
 
 ---
 

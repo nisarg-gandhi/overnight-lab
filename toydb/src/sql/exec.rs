@@ -150,24 +150,28 @@ pub struct ScanExec {
     table: Option<BTree>,
     bounds: (Bound<Vec<u8>>, Bound<Vec<u8>>),
     cursor: Option<Cursor>,
+    /// For a primary-key point lookup: the key, until it has been read.
+    /// A plain `get` is cheaper than opening a cursor (no leaf copy).
+    point: Option<Vec<u8>>,
 }
 
 impl ScanExec {
     pub fn new(table: &Table, access: Access) -> Self {
         let bounds = key_bounds(&access);
-        match access {
-            Access::Index { index, .. } => ScanExec {
-                tree: BTree::open(index.root),
-                table: Some(BTree::open(table.root)),
-                bounds,
-                cursor: None,
-            },
-            _ => ScanExec {
-                tree: BTree::open(table.root),
-                table: None,
-                bounds,
-                cursor: None,
-            },
+        let point = match &access {
+            Access::Key(v) => Some(encode_key(v)),
+            _ => None,
+        };
+        let (tree, table) = match access {
+            Access::Index { index, .. } => (BTree::open(index.root), Some(BTree::open(table.root))),
+            _ => (BTree::open(table.root), None),
+        };
+        ScanExec {
+            tree,
+            table,
+            bounds,
+            cursor: None,
+            point,
         }
     }
 
@@ -186,6 +190,16 @@ impl ScanExec {
 
     /// Next `(primary key, row)` pair; used directly by UPDATE and DELETE.
     pub fn next_entry(&mut self, s: &mut dyn PageStore) -> Result<Option<(Vec<u8>, Row)>> {
+        if let Some(key) = self.point.as_mut() {
+            if key.is_empty() {
+                return Ok(None); // already returned
+            }
+            let key = std::mem::take(key);
+            return match self.tree.get(s, &key)? {
+                Some(v) => Ok(Some((key, decode_row(&v)?))),
+                None => Ok(None),
+            };
+        }
         self.open(s)?;
         let cursor = self.cursor.as_mut().unwrap();
         match self.table {
@@ -206,7 +220,7 @@ impl ScanExec {
 
 impl Executor for ScanExec {
     fn next(&mut self, s: &mut dyn PageStore) -> Result<Option<Row>> {
-        if self.table.is_some() {
+        if self.table.is_some() || self.point.is_some() {
             return Ok(self.next_entry(s)?.map(|(_, row)| row));
         }
         self.open(s)?;

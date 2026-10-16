@@ -12,8 +12,8 @@
 //! | [`btree`]       | B+tree over pages: the only index structure               |
 //! | [`txn`]         | shared/exclusive locks (strict two-phase locking)         |
 //! | [`types`]       | values, row encoding, order-preserving key encoding       |
-//! | [`catalog`]     | table definitions, stored in a table of their own         |
-//! | [`sql`]         | lexer, parser, planner, Volcano executor                  |
+//! | [`catalog`]     | table/index definitions (stored in a table), index upkeep |
+//! | [`sql`]         | lexer, parser, planner, Volcano executor, joins           |
 //! | [`db`]          | `Database` and `Session`: the public API                  |
 
 pub mod btree;

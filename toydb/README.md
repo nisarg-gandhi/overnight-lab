@@ -226,11 +226,12 @@ cd bench && cargo run --release -- 20000
 ```
 
 Typical ratios (toydb time / SQLite time) on the development VM: durable
-single-row commits **1.1×** (both are fsync-bound), point lookups **1.2×**,
-GROUP BY queries **1.2×**, scans **~4×**, bulk inserts **3–7×**, bulk deletes
-**~45×**. DESIGN.md has the full table, the methodology, and an explanation of
-where the time goes (mostly: decoding/encoding whole nodes instead of editing
-slotted pages in place).
+single-row commits **1.1–1.4×** (both are fsync-bound), point lookups
+**1.2×**, GROUP BY queries **1.4×**, scans **~4–5×**, bulk inserts **3–7×**,
+joins **~12×**, bulk deletes **~45×**. DESIGN.md has the full table, the
+methodology, and an explanation of where the time goes (mostly: decoding
+whole nodes and rows instead of editing slotted pages and reading columns in
+place).
 
 ## License
 

@@ -188,6 +188,21 @@ fn workloads(n: usize) -> Vec<Workload> {
             }
         }),
     });
+    let joins = 20;
+    w.push(Workload {
+        name: format!("{joins} joins of 1000 rows via primary key"),
+        ops: joins,
+        run: Box::new(move |e| {
+            for j in 0..joins {
+                let lo = j * 500;
+                let got = e.query_int(&format!(
+                    "SELECT COUNT(*) FROM t JOIN r ON r.id = t.id WHERE t.id >= {lo} AND t.id < {}",
+                    lo + 1000
+                ));
+                assert_eq!(got, 1000);
+            }
+        }),
+    });
     w.push(Workload {
         name: format!("update {} rows by range, 1 txn", n / 2),
         ops: n / 2,

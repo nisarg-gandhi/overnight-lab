@@ -10,23 +10,27 @@
 //!         Filter #1 > 1                  -- HAVING, over Aggregate's output
 //!           Aggregate group=[dept] aggs=[COUNT(*)]
 //!             Filter id > 10             -- WHERE
-//!               Scan emp range id > 10   -- primary-key range, not full scan
+//!               Scan emp (range id > 10) -- primary-key range, not full scan
 //! ```
 //!
 //! Steps, in the order SQL semantics require:
 //!
-//! 1. **Access path.** If WHERE constrains the primary key with constants
-//!    (`pk = 5`, `pk > 3 AND pk <= 9`, `pk BETWEEN ...`), scan only that key
-//!    range of the B+tree. The full WHERE is still applied afterwards, so
-//!    this is purely an optimization.
-//! 2. **Filter** by WHERE.
-//! 3. **Aggregate** if there is a GROUP BY or any aggregate function. Its
+//! 1. **Access path.** If WHERE constrains the primary key or the first
+//!    column of a secondary index with constants (`pk = 5`,
+//!    `pk > 3 AND pk <= 9`, `col BETWEEN ...`), read only that key range
+//!    (see [`choose_access`]). The full WHERE is still applied afterwards,
+//!    so this is purely an optimization.
+//! 2. **Joins**, left to right, as nested loops; the inner table is looked
+//!    up by primary key or index when the ON clause equates one of its
+//!    columns with an expression over the tables to its left.
+//! 3. **Filter** by WHERE.
+//! 4. **Aggregate** if there is a GROUP BY or any aggregate function. Its
 //!    output rows are `[group values..., aggregate results...]`; every later
 //!    expression is re-bound against that shape, which is how `COUNT(*) > 1`
 //!    in HAVING becomes "column #1 > 1".
-//! 4. **Project** the SELECT list, plus hidden extra columns for ORDER BY
+//! 5. **Project** the SELECT list, plus hidden extra columns for ORDER BY
 //!    terms that aren't in the SELECT list.
-//! 5. **Distinct**, **Sort**, **Limit**, then drop hidden columns.
+//! 6. **Distinct**, **Sort**, **Limit**, then drop hidden columns.
 
 use std::fmt;
 use std::ops::Bound;
