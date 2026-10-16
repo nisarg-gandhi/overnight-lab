@@ -343,6 +343,41 @@ pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
         }
     }
 
+    // SELECT-list aliases may be used in GROUP BY and HAVING (as in SQLite;
+    // PostgreSQL allows them in GROUP BY). A real column of the same name
+    // takes precedence. GROUP BY may also use positions (`GROUP BY 1`).
+    let aliases: Vec<(String, Expr)> = sel
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            SelectItem::Expr(e, Some(a)) if table.is_none_or(|t| t.column_index(a).is_none()) => {
+                Some((a.clone(), e.clone()))
+            }
+            _ => None,
+        })
+        .collect();
+    let expand_aliases = |e: &Expr| {
+        e.transform(&|x| match x {
+            Expr::Column(None, name) => aliases.iter().find(|(a, _)| a == name).map(|(_, e)| e.clone()),
+            _ => None,
+        })
+    };
+    let group_by: Vec<Expr> = sel
+        .group_by
+        .iter()
+        .map(|g| match g {
+            Expr::Literal(Value::Integer(k)) => {
+                if *k < 1 || *k as usize > items.len() {
+                    Err(query_err!("GROUP BY position {k} is out of range"))
+                } else {
+                    Ok(items[*k as usize - 1].0.clone())
+                }
+            }
+            g => Ok(expand_aliases(g)),
+        })
+        .collect::<Result<_>>()?;
+    let having = sel.having.as_ref().map(expand_aliases);
+
     // Aggregation.
     let mut agg_exprs: Vec<Expr> = vec![];
     {
@@ -369,19 +404,18 @@ pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
         for (e, _) in &items {
             visit(e)?;
         }
-        if let Some(h) = &sel.having {
+        if let Some(h) = &having {
             visit(h)?;
         }
         for o in &sel.order_by {
             visit(&o.expr)?;
         }
     }
-    let aggregating = !sel.group_by.is_empty() || !agg_exprs.is_empty();
+    let aggregating = !group_by.is_empty() || !agg_exprs.is_empty();
     let mut binder = Binder::new(table, "this context");
     if aggregating {
         let group_binder = Binder::new(table, "GROUP BY");
-        let groups = sel
-            .group_by
+        let groups = group_by
             .iter()
             .map(|g| group_binder.bind(g))
             .collect::<Result<Vec<_>>>()?;
@@ -404,7 +438,7 @@ pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
         }
         let desc = format!(
             "group by [{}] aggregates [{}]",
-            sel.group_by.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(", "),
+            group_by.iter().map(|g| g.to_string()).collect::<Vec<_>>().join(", "),
             agg_exprs.iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ")
         );
         plan = Plan::Aggregate {
@@ -413,11 +447,11 @@ pub fn plan_select(catalog: &Catalog, sel: &Select) -> Result<QueryPlan> {
             aggs,
             desc,
         };
-        binder.agg = Some((&sel.group_by, &agg_exprs));
-    } else if sel.having.is_some() {
+        binder.agg = Some((&group_by, &agg_exprs));
+    } else if having.is_some() {
         return Err(query_err!("HAVING requires GROUP BY or an aggregate function"));
     }
-    if let Some(h) = &sel.having {
+    if let Some(h) = &having {
         binder.context = "HAVING";
         plan = Plan::Filter {
             input: Box::new(plan),

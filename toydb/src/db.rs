@@ -143,10 +143,10 @@ impl Database {
         }
     }
 
-    /// Names of all user tables.
+    /// Names of all user tables, read through a fresh session (so it takes
+    /// a shared lock and never sees another session's uncommitted DDL).
     pub fn table_names(&self) -> Result<Vec<String>> {
-        let mut e = self.shared.engine();
-        Ok(e.catalog()?.tables().map(|t| t.name.clone()).collect())
+        self.session().table_names()
     }
 }
 
@@ -172,6 +172,20 @@ impl Session {
     /// Is an explicit transaction (BEGIN ...) open?
     pub fn in_transaction(&self) -> bool {
         self.in_txn
+    }
+
+    /// Names of all user tables, as seen by this session.
+    pub fn table_names(&mut self) -> Result<Vec<String>> {
+        match self.execute("SELECT name FROM toydb_schema WHERE type = 'table' ORDER BY name")? {
+            QueryResult::Rows { rows, .. } => Ok(rows
+                .into_iter()
+                .map(|mut r| match r.remove(0) {
+                    crate::Value::Text(t) => t,
+                    v => v.to_string(),
+                })
+                .collect()),
+            _ => unreachable!("SELECT returns rows"),
+        }
     }
 
     /// Execute a single SQL statement.

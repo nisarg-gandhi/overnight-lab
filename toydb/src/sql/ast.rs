@@ -231,6 +231,32 @@ impl fmt::Display for CreateTable {
 }
 
 impl Expr {
+    /// Rebuild the expression bottom-up, replacing every sub-expression for
+    /// which `f` returns `Some`.
+    pub fn transform(&self, f: &impl Fn(&Expr) -> Option<Expr>) -> Expr {
+        if let Some(e) = f(self) {
+            return e;
+        }
+        let t = |e: &Expr| Box::new(e.transform(f));
+        match self {
+            Expr::Literal(_) | Expr::Column(..) => self.clone(),
+            Expr::Unary(op, e) => Expr::Unary(*op, t(e)),
+            Expr::Binary(op, l, r) => Expr::Binary(*op, t(l), t(r)),
+            Expr::IsNull(e, n) => Expr::IsNull(t(e), *n),
+            Expr::InList(e, list, n) => {
+                Expr::InList(t(e), list.iter().map(|x| x.transform(f)).collect(), *n)
+            }
+            Expr::Like(e, p, n) => Expr::Like(t(e), t(p), *n),
+            Expr::Between(e, lo, hi, n) => Expr::Between(t(e), t(lo), t(hi), *n),
+            Expr::Function { name, args, distinct, star } => Expr::Function {
+                name: name.clone(),
+                args: args.iter().map(|x| x.transform(f)).collect(),
+                distinct: *distinct,
+                star: *star,
+            },
+        }
+    }
+
     /// Visit this expression and all sub-expressions, pre-order.
     pub fn walk(&self, f: &mut impl FnMut(&Expr)) {
         f(self);

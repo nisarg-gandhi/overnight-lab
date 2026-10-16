@@ -158,6 +158,15 @@ fn aggregates_and_group_by() {
     assert_eq!(col(&mut s, "SELECT COUNT(DISTINCT city) FROM people"), vec!["5"]);
     assert_eq!(col(&mut s, "SELECT DISTINCT city FROM people ORDER BY city"), vec!["Austin", "Boston", "London", "New York", "Stanford"]);
     assert_eq!(col(&mut s, "SELECT age / 10 * 10 AS decade FROM people WHERE age IS NOT NULL GROUP BY age / 10 * 10 ORDER BY decade"), vec!["30", "40", "70", "80"]);
+    // Aliases and positions in GROUP BY / HAVING.
+    assert_eq!(
+        q(&mut s, "SELECT age / 10 * 10 AS decade, COUNT(*) AS n FROM people WHERE age IS NOT NULL GROUP BY decade HAVING n >= 1 ORDER BY decade"),
+        vec![vec!["30", "1"], vec!["40", "2"], vec!["70", "1"], vec!["80", "1"]]
+    );
+    assert_eq!(col(&mut s, "SELECT city, COUNT(*) FROM people GROUP BY 1 HAVING COUNT(*) = 2"), vec!["London"]);
+    // A real column wins over an alias of the same name.
+    assert_eq!(col(&mut s, "SELECT COUNT(*) AS age FROM people GROUP BY age ORDER BY 1 DESC LIMIT 1"), vec!["1"]);
+    assert!(matches!(err(&mut s, "SELECT city FROM people GROUP BY 2"), Error::Query(_)));
     // Aggregates over an empty input.
     assert_eq!(q(&mut s, "SELECT COUNT(*), SUM(age), MAX(age) FROM people WHERE id > 100"), vec![vec!["0", "NULL", "NULL"]]);
     assert!(q(&mut s, "SELECT city, COUNT(*) FROM people WHERE id > 100 GROUP BY city").is_empty());

@@ -118,7 +118,7 @@ impl Shell {
         match cmd {
             ".quit" | ".exit" | ".q" => return false,
             ".help" => print!("{HELP}"),
-            ".tables" => match self.db.table_names() {
+            ".tables" => match self.session.table_names() {
                 Ok(names) => names.iter().for_each(|n| println!("{n}")),
                 Err(e) => eprintln!("Error: {e}"),
             },

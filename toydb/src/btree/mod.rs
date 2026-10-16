@@ -20,8 +20,10 @@
 //!   nodes can stay under-full; lookups remain correct, only space is lost.
 //! * Values too big to sit in a leaf go to a chain of overflow pages.
 //!
-//! The algorithms are recursive and decode each node on the way down (see
-//! `node.rs`). Trees are only a few levels deep, so recursion is fine.
+//! The algorithms are recursive (trees are only a few levels deep). Read-only
+//! steps — choosing a child, point lookups, cursors — parse the encoded page
+//! in place; a node is decoded into a [`Node`] only when it must change (see
+//! `node.rs`).
 
 pub mod node;
 
