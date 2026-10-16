@@ -29,6 +29,7 @@ use std::ops::Bound;
 
 use crate::error::{corrupt, Error, Result};
 use crate::storage::{PageId, PageStore, PAGE_SIZE};
+use crate::storage::pager::new_page_buf;
 use crate::util::bytes::{get_u16, get_u32, put_u16, put_u32};
 use node::{Cell, Node, MAX_KEY_SIZE, MAX_LEAF_ENTRY, NODE_HEADER};
 
@@ -84,19 +85,25 @@ impl BTree {
 
     // --- lookup ------------------------------------------------------------
 
-    /// Point lookup.
+    /// Point lookup. Reads pages in place without decoding them.
     pub fn get(&self, s: &mut dyn PageStore, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let leaf = self.find_leaf(s, Some(key))?;
+        match node::page_leaf_lookup(s.read(leaf)?, key)? {
+            Some(cell) => Ok(Some(read_cell(s, &cell)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Descend from the root to the leaf that would contain `key` (the
+    /// leftmost leaf for `None`).
+    fn find_leaf(&self, s: &mut dyn PageStore, key: Option<&[u8]>) -> Result<PageId> {
         let mut id = self.root;
         loop {
-            match load(s, id)? {
-                Node::Internal { keys, children } => id = children[child_index(&keys, key)],
-                Node::Leaf { keys, vals, .. } => {
-                    return match keys.binary_search_by(|k| k.as_slice().cmp(key)) {
-                        Ok(i) => Ok(Some(read_cell(s, &vals[i])?)),
-                        Err(_) => Ok(None),
-                    }
-                }
+            let page = s.read(id)?;
+            if node::page_is_leaf(page)? {
+                return Ok(id);
             }
+            id = node::page_find_child(page, key)?;
         }
     }
 
@@ -108,40 +115,41 @@ impl BTree {
         end: Bound<&[u8]>,
     ) -> Result<Cursor> {
         // Descend to the leaf that would contain the start key.
-        let mut id = self.root;
-        let leaf = loop {
-            match load(s, id)? {
-                Node::Internal { keys, children } => {
-                    id = match start {
-                        Bound::Unbounded => children[0],
-                        Bound::Included(k) | Bound::Excluded(k) => {
-                            children[child_index(&keys, k)]
-                        }
-                    }
-                }
-                leaf => break leaf,
-            }
+        let start_key = match start {
+            Bound::Unbounded => None,
+            Bound::Included(k) | Bound::Excluded(k) => Some(k),
         };
-        let Node::Leaf { keys, vals, next } = leaf else {
-            unreachable!()
-        };
-        let pos = match start {
-            Bound::Unbounded => 0,
-            Bound::Included(k) => keys.partition_point(|x| x.as_slice() < k),
-            Bound::Excluded(k) => keys.partition_point(|x| x.as_slice() <= k),
-        };
-        Ok(Cursor {
-            keys,
-            vals,
-            pos,
-            next,
+        let leaf = self.find_leaf(s, start_key)?;
+        let mut cursor = Cursor {
+            page: new_page_buf(),
+            n: 0,
+            pos: 0,
+            off: NODE_HEADER,
+            next: leaf,
             end: match end {
                 Bound::Included(k) => Bound::Included(k.to_vec()),
                 Bound::Excluded(k) => Bound::Excluded(k.to_vec()),
                 Bound::Unbounded => Bound::Unbounded,
             },
             done: false,
-        })
+        };
+        cursor.load_next_leaf(s)?;
+        // Skip entries before the start bound. Every later leaf only holds
+        // keys >= the separator we descended left of, so if this leaf runs
+        // out the cursor simply continues with the next one.
+        if let Some(k) = start_key {
+            let inclusive = matches!(start, Bound::Included(_));
+            while cursor.pos < cursor.n {
+                let (kstart, klen, _, next) = node::page_leaf_entry(&cursor.page, cursor.off)?;
+                let key = &cursor.page[kstart..kstart + klen];
+                if key > k || (inclusive && key == k) {
+                    break;
+                }
+                cursor.pos += 1;
+                cursor.off = next;
+            }
+        }
+        Ok(cursor)
     }
 
     /// Iterate over the whole tree in key order.
@@ -220,6 +228,22 @@ impl BTree {
         key: &[u8],
         cell: Cell,
     ) -> Result<InsertResult> {
+        // Internal nodes are only decoded if a child split and we must add
+        // a separator; the common case just reads the page in place.
+        let page = s.read(id)?;
+        if !node::page_is_leaf(page)? {
+            let child = node::page_find_child(page, Some(key))?;
+            let (replaced, split) = self.insert_rec(s, child, key, cell)?;
+            let Some((sep, right)) = split else {
+                return Ok((replaced, None)); // child absorbed the insert
+            };
+            let mut node = load(s, id)?;
+            let Node::Internal { keys, children } = &mut node else { unreachable!() };
+            let i = child_index(keys, key);
+            keys.insert(i, sep);
+            children.insert(i + 1, right);
+            return self.store_or_split(s, id, node, replaced);
+        }
         let mut node = load(s, id)?;
         let replaced = match &mut node {
             Node::Leaf { keys, vals, .. } => {
@@ -238,21 +262,19 @@ impl BTree {
                     }
                 }
             }
-            Node::Internal { keys, children } => {
-                let i = child_index(keys, key);
-                let (replaced, split) = self.insert_rec(s, children[i], key, cell)?;
-                match split {
-                    // Child absorbed the insert; this node is unchanged.
-                    None => return Ok((replaced, None)),
-                    Some((sep, right)) => {
-                        keys.insert(i, sep);
-                        children.insert(i + 1, right);
-                    }
-                }
-                replaced
-            }
+            Node::Internal { .. } => unreachable!("handled above"),
         };
+        self.store_or_split(s, id, node, replaced)
+    }
 
+    /// Write `node` back to page `id`, splitting it first if it overflows.
+    fn store_or_split(
+        &self,
+        s: &mut dyn PageStore,
+        id: PageId,
+        mut node: Node,
+        replaced: bool,
+    ) -> Result<InsertResult> {
         if node.size() <= PAGE_SIZE {
             store(s, id, &node)?;
             return Ok((replaced, None));
@@ -273,54 +295,67 @@ impl BTree {
 
     /// Delete `key`. Returns `true` if it was present.
     pub fn delete(&self, s: &mut dyn PageStore, key: &[u8]) -> Result<bool> {
-        let found = self.delete_rec(s, self.root, key)?;
+        let found = self.delete_rec(s, self.root, key)?.is_some();
         // Collapse a root that has a single child: pull the child up.
         loop {
-            match load(s, self.root)? {
-                Node::Internal { keys, children } if keys.is_empty() => {
-                    let child = load(s, children[0])?;
-                    store(s, self.root, &child)?;
-                    s.free(children[0])?;
-                }
-                _ => break,
+            let page = s.read(self.root)?;
+            if node::page_is_leaf(page)? || node::page_num_keys(page) > 0 {
+                break;
             }
+            let child_id = node::page_find_child(page, None)?;
+            let child = load(s, child_id)?;
+            store(s, self.root, &child)?;
+            s.free(child_id)?;
         }
         Ok(found)
     }
 
-    fn delete_rec(&self, s: &mut dyn PageStore, id: PageId, key: &[u8]) -> Result<bool> {
-        let mut node = load(s, id)?;
-        if let Node::Leaf { keys, vals, .. } = &mut node {
-            let Ok(i) = keys.binary_search_by(|k| k.as_slice().cmp(key)) else {
-                return Ok(false);
+    /// Delete `key` from the subtree rooted at `id`. Returns `None` if the
+    /// key wasn't there, else the subtree root's new encoded size (so the
+    /// parent can decide whether to merge without re-reading the page).
+    fn delete_rec(&self, s: &mut dyn PageStore, id: PageId, key: &[u8]) -> Result<Option<usize>> {
+        let page = s.read(id)?;
+        if !node::page_is_leaf(page)? {
+            let child = node::page_find_child(page, Some(key))?;
+            let Some(child_size) = self.delete_rec(s, child, key)? else {
+                return Ok(None);
             };
-            keys.remove(i);
-            if let Cell::Overflow { first, .. } = vals.remove(i) {
-                free_overflow(s, first)?;
+            if child_size >= UNDERFLOW {
+                return Ok(Some(node::page_node_size(s.read(id)?)?));
             }
-            store(s, id, &node)?;
-            return Ok(true);
+            let mut node = load(s, id)?;
+            let Node::Internal { keys, .. } = &node else { unreachable!() };
+            let i = child_index(keys, key);
+            if self.maybe_merge(s, &mut node, i)? {
+                store(s, id, &node)?;
+            }
+            return Ok(Some(node.size()));
         }
-        let Node::Internal { keys, children } = &node else { unreachable!() };
-        let i = child_index(keys, key);
-        if !self.delete_rec(s, children[i], key)? {
-            return Ok(false);
+        if node::page_leaf_lookup(page, key)?.is_none() {
+            return Ok(None); // avoid decoding (and dirtying) the leaf
         }
-        if self.maybe_merge(s, &mut node, i)? {
-            store(s, id, &node)?;
+        let mut node = load(s, id)?;
+        let Node::Leaf { keys, vals, .. } = &mut node else { unreachable!() };
+        let Ok(i) = keys.binary_search_by(|k| k.as_slice().cmp(key)) else {
+            unreachable!("lookup found it")
+        };
+        keys.remove(i);
+        if let Cell::Overflow { first, .. } = vals.remove(i) {
+            free_overflow(s, first)?;
         }
-        Ok(true)
+        store(s, id, &node)?;
+        Ok(Some(node.size()))
     }
 
-    /// After a delete below `parent.children[i]`, merge that child with a
-    /// sibling if it is under-full and the pair fits in one page. Returns
-    /// whether `parent` changed.
+    /// After a delete left `parent.children[i]` under-full, merge it with a
+    /// sibling if the pair fits in one page. Returns whether `parent`
+    /// changed.
     fn maybe_merge(&self, s: &mut dyn PageStore, parent: &mut Node, i: usize) -> Result<bool> {
         let Node::Internal { keys, children } = parent else { unreachable!() };
-        let child = load(s, children[i])?;
-        if child.size() >= UNDERFLOW || children.len() < 2 {
+        if children.len() < 2 {
             return Ok(false);
         }
+        let child = load(s, children[i])?;
         // Prefer merging with the right sibling; the rightmost child merges
         // into its left sibling instead. `li` is the left of the pair.
         let li = if i + 1 < children.len() { i } else { i - 1 };
@@ -538,56 +573,93 @@ fn read_cell(s: &mut dyn PageStore, cell: &Cell) -> Result<Vec<u8>> {
 
 /// A forward iterator over a key range.
 ///
-/// The cursor holds a decoded copy of the current leaf and follows the leaf
-/// chain. It doesn't implement `Iterator` because every step needs the page
-/// store, which the caller passes in. If the tree is modified while a cursor
-/// is open, the cursor may observe a stale leaf; the executor therefore never
+/// The cursor keeps a private copy of the current leaf page and parses
+/// entries straight out of it, following the leaf chain when it runs out.
+/// It doesn't implement `Iterator` because every step needs the page store,
+/// which the caller passes in. If the tree is modified while a cursor is
+/// open, the cursor may observe a stale leaf; the executor therefore never
 /// mutates a tree it is scanning (UPDATE/DELETE collect keys first).
-#[derive(Debug)]
 pub struct Cursor {
-    keys: Vec<Vec<u8>>,
-    vals: Vec<Cell>,
+    /// Copy of the current leaf.
+    page: Box<crate::storage::PageBuf>,
+    /// Number of entries in `page`, index and byte offset of the next one.
+    n: usize,
     pos: usize,
+    off: usize,
+    /// Next leaf to load (0 = none).
     next: PageId,
     end: Bound<Vec<u8>>,
     done: bool,
 }
 
+impl std::fmt::Debug for Cursor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cursor").field("pos", &self.pos).field("next", &self.next).finish()
+    }
+}
+
 impl Cursor {
-    /// Advance and return the next entry, or `None` at the end of the range.
+    fn load_next_leaf(&mut self, s: &mut dyn PageStore) -> Result<()> {
+        let page = s.read(self.next)?;
+        if !node::page_is_leaf(page)? {
+            return Err(corrupt!("leaf chain points at internal node {}", self.next));
+        }
+        self.page.copy_from_slice(page);
+        self.n = node::page_num_keys(&self.page);
+        self.pos = 0;
+        self.off = NODE_HEADER;
+        self.next = get_u32(&self.page[..], 3);
+        Ok(())
+    }
+
+    /// Advance and pass the next entry's key and value to `f` as borrowed
+    /// slices, avoiding any allocation for inline values. Returns `None` at
+    /// the end of the range.
+    pub fn next_with<T>(
+        &mut self,
+        s: &mut dyn PageStore,
+        f: impl FnOnce(&[u8], &[u8]) -> Result<T>,
+    ) -> Result<Option<T>> {
+        loop {
+            if self.done {
+                return Ok(None);
+            }
+            if self.pos == self.n {
+                if self.next == 0 {
+                    self.done = true;
+                    continue;
+                }
+                self.load_next_leaf(s)?;
+                continue;
+            }
+            let (kstart, klen, cell, next) = node::page_leaf_entry(&self.page, self.off)?;
+            self.pos += 1;
+            self.off = next;
+            let key = &self.page[kstart..kstart + klen];
+            let past_end = match &self.end {
+                Bound::Unbounded => false,
+                Bound::Included(e) => key > e.as_slice(),
+                Bound::Excluded(e) => key >= e.as_slice(),
+            };
+            if past_end {
+                self.done = true;
+                continue;
+            }
+            return match cell {
+                node::CellPos::Inline { start, len } => f(key, &self.page[start..start + len]).map(Some),
+                node::CellPos::Overflow { len, first } => {
+                    let key = key.to_vec();
+                    let value = read_overflow(s, first, len)?.0;
+                    f(&key, &value).map(Some)
+                }
+            };
+        }
+    }
+
+    /// Advance and return the next entry (owned), or `None` at the end.
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self, s: &mut dyn PageStore) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
-        while !self.done {
-            if self.pos < self.keys.len() {
-                let i = self.pos;
-                self.pos += 1;
-                let past_end = match &self.end {
-                    Bound::Unbounded => false,
-                    Bound::Included(e) => self.keys[i] > *e,
-                    Bound::Excluded(e) => self.keys[i] >= *e,
-                };
-                if past_end {
-                    self.done = true;
-                    break;
-                }
-                let v = read_cell(s, &self.vals[i])?;
-                return Ok(Some((std::mem::take(&mut self.keys[i]), v)));
-            }
-            if self.next == 0 {
-                self.done = true;
-                break;
-            }
-            match load(s, self.next)? {
-                Node::Leaf { keys, vals, next } => {
-                    self.keys = keys;
-                    self.vals = vals;
-                    self.next = next;
-                    self.pos = 0;
-                }
-                Node::Internal { .. } => return Err(corrupt!("leaf chain points at internal node")),
-            }
-        }
-        Ok(None)
+        self.next_with(s, |k, v| Ok((k.to_vec(), v.to_vec())))
     }
 
     /// Drain the rest of the cursor into a vector (convenience for tests).

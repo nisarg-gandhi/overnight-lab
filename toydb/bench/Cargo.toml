@@ -1,0 +1,16 @@
+[package]
+name = "toydb-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Compare toydb with SQLite on a few simple workloads"
+
+# A separate crate so that the main toydb crate's `cargo test` never has to
+# compile SQLite. Run with:  cargo run --release  (from this directory)
+
+[dependencies]
+toydb = { path = ".." }
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[profile.release]
+debug = false

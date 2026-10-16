@@ -240,8 +240,11 @@ Overflow page:
 (`Vec`s of keys, values, children), the algorithm edits it with ordinary
 `Vec` operations, and it is encoded back. Production engines use *slotted
 pages* and edit bytes in place, which avoids copying but makes every
-operation fiddly. For a learning project, readable algorithms win. The cost
-shows up in the benchmarks: point reads copy a whole node.
+operation fiddly. For a learning project, readable algorithms win. Paths
+that only *read* — descending through internal nodes, point lookups, range
+cursors — skip the decode and parse the encoded page in place, because
+profiling showed allocation dominating them. Modifications still pay for a
+decode and re-encode, which is visible in the benchmarks.
 
 **Size limits that make splitting always work.** Keys are at most 512
 bytes, and a leaf entry stored inline is at most a quarter page (1022
@@ -296,9 +299,10 @@ tree doesn't accumulate empty leaves in practice.
 ### Range scans and cursors
 
 `range(lo, hi)` descends to the leaf that would contain `lo`, then a
-`Cursor` walks the leaf chain. The cursor holds a decoded copy of the
-current leaf, so it never holds a buffer-pool reference between calls (see
-§4). The flip side: modifying a tree while a cursor is open over it would
+`Cursor` walks the leaf chain. The cursor keeps a private copy of the
+current leaf page (one 4 KiB `memcpy` per leaf) and parses entries out of
+it, handing borrowed key/value slices to the caller; it never holds a
+buffer-pool reference between calls (see §4). The flip side: modifying a tree while a cursor is open over it would
 let the cursor see stale data, so UPDATE and DELETE first collect the
 matching keys and then modify (§10).
 
@@ -759,16 +763,62 @@ can't detect a missing fsync isn't testing durability.
 
 ## Benchmarks
 
-`cargo bench --bench compare` runs a small, dependency-light harness that
-performs the same workloads on toydb and on SQLite (via `rusqlite`, a
-dev-dependency used only here). Both use a WAL with fsync on commit unless
-noted. See `benches/compare.rs` for exactly what is measured; numbers below
-are from the development container and only meaningful relative to each
-other.
+`toydb/bench` is a separate crate (so the main crate's tests never compile
+SQLite) that runs the same workloads on toydb and on SQLite through
+`rusqlite`:
 
-<!-- BENCHMARK RESULTS -->
-*(Results are filled in by running the benchmark; see the "Benchmark
-results" subsection below.)*
+```sh
+cd toydb/bench && cargo run --release -- 20000     # N rows
+```
+
+Methodology: both engines get *identical SQL text* for every operation, so
+both parse and plan each statement (SQLite's prepared-statement cache is not
+used). Both log to a WAL and fsync on commit: SQLite runs with
+`journal_mode=WAL, synchronous=FULL, cache_size=4 MiB`, matching toydb's
+defaults. Results from the development container (4-core Xeon VM, 20 000
+rows; numbers vary ±30% between runs, so read the ratios, not the digits):
+
+| workload                                         |        toydb |       sqlite |    ratio |
+|--------------------------------------------------|--------------|--------------|----------|
+| insert 20000 rows, sequential keys, 1 txn        |    9.3 µs/op |    1.3 µs/op |     7.0x |
+| insert 20000 rows, random keys, 1 txn            |    7.7 µs/op |    2.5 µs/op |     3.1x |
+| 10000 point lookups by primary key               |    4.6 µs/op |    3.9 µs/op |     1.2x |
+| 500 range scans of 100 rows                      |   42.5 µs/op |   11.4 µs/op |     3.7x |
+| 20 full scans with filter + aggregate            |   4.09 ms/op |   1.03 ms/op |     4.0x |
+| 10 GROUP BY + ORDER BY queries                   |   5.31 ms/op |   4.38 ms/op |     1.2x |
+| update 10000 rows by range, 1 txn                |    3.5 µs/op |    0.4 µs/op |     9.7x |
+| 200 single-row autocommit inserts (fsync each)   |  345.3 µs/op |  324.0 µs/op |     1.1x |
+| delete 10000 rows, 1 txn                         |    6.5 µs/op |    0.1 µs/op |    46.4x |
+
+How to read this:
+
+* **Durable commits cost the same** (1.1×): a small autocommit transaction
+  is dominated by the fsync, and both engines do exactly one.
+* **Point lookups and GROUP BY are close** (1.2×): per-statement overhead
+  (parsing, planning, locking) and the hash/sort work dominate, and toydb's
+  lookup path reads pages in place without decoding them.
+* **Scans are ~4× slower**: toydb's executor allocates — every row is
+  decoded into a `Vec<Value>` with owned `String`s, and expression evaluation
+  clones values. SQLite's bytecode VM reads columns lazily straight from the
+  page. Lazy column decoding and borrowing values would close much of this.
+* **Bulk writes are 3–45× slower**: every B+tree modification decodes the
+  leaf into a `Node`, edits `Vec`s and re-encodes the whole page, and each
+  statement also snapshots page pre-images for its savepoint. SQLite edits
+  slotted pages in place. Deletes are worst because each one re-encodes a
+  full leaf to remove ~70 bytes. This is the price of decision #4, and
+  slotted pages are the fix (§14).
+
+Two profiling-driven optimizations were made while building the benchmark
+(`valgrind --tool=callgrind` showed ~40% of scan time in `malloc`/`free`):
+
+1. B+tree descents and point lookups read the encoded page in place
+   (`page_find_child`, `page_leaf_lookup`) instead of decoding every node on
+   the path; deletes pass the child's new size up instead of re-reading it.
+   Inserts got ~2.5× faster, deletes ~3×, point lookups ~2×.
+2. Cursors keep a copy of the current leaf and hand borrowed key/value
+   slices to the scan, which decodes rows directly from them; ungrouped
+   aggregates skip the group map; `LIKE` on ASCII strings no longer
+   allocates. Full scans got ~2× faster.
 
 ---
 
@@ -802,7 +852,8 @@ SQL → REPL → benchmarks.)
 | 20 | Volcano iterators; fully materialized results in the API | Textbook model; simple API | Vectorized/push-based execution; streaming result iterator |
 | 21 | Collect-then-modify for UPDATE/DELETE | Avoids cursor invalidation and the Halloween problem | Cursors robust to concurrent modification |
 | 22 | REPL without line-editing library | Zero deps; works fine with `rlwrap toydb` | `rustyline` |
-| 23 | Benchmarks as a plain harness (`harness = false`) | Few dependencies, readable output table | `criterion` |
+| 23 | Benchmarks in a separate `bench/` crate with a plain timing harness | `cargo test` on the main crate never compiles SQLite; a readable comparison table | `criterion` bench in the main crate |
+| 24 | Allocation-free in-page search for descents/lookups, cursors over a page copy | Profiling showed allocation dominated; keeps the decode/encode model for modifications | Full slotted-page rewrite |
 
 ---
 

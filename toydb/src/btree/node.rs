@@ -292,6 +292,124 @@ impl Node {
     }
 }
 
+// --- allocation-free access to encoded pages ------------------------------------
+//
+// Decoding a node allocates a Vec per key. On the hot paths — descending
+// through internal nodes and point lookups in leaves — we only need to
+// *read* a page, so these helpers work on the encoded bytes directly.
+
+/// Is this page a leaf (as opposed to an internal node)?
+pub fn page_is_leaf(page: &PageBuf) -> Result<bool> {
+    match page[0] {
+        KIND_LEAF => Ok(true),
+        KIND_INTERNAL => Ok(false),
+        k => Err(corrupt!("invalid B+tree node kind {k}")),
+    }
+}
+
+/// Number of keys in an encoded node.
+pub fn page_num_keys(page: &PageBuf) -> usize {
+    get_u16(page, 1) as usize
+}
+
+/// For an encoded internal node: the child to descend into for `key`
+/// (the child after the last separator `<= key`). `None` key means the
+/// leftmost child.
+pub fn page_find_child(page: &PageBuf, key: Option<&[u8]>) -> Result<PageId> {
+    let mut child = get_u32(page, 3);
+    let Some(key) = key else { return Ok(child) };
+    let mut off = NODE_HEADER;
+    for _ in 0..page_num_keys(page) {
+        if off + 2 > PAGE_SIZE {
+            return Err(corrupt!("B+tree node entry runs past end of page"));
+        }
+        let klen = get_u16(page, off) as usize;
+        let end = off + 2 + klen + 4;
+        if end > PAGE_SIZE {
+            return Err(corrupt!("B+tree node entry runs past end of page"));
+        }
+        if &page[off + 2..off + 2 + klen] > key {
+            break;
+        }
+        child = get_u32(page, off + 2 + klen);
+        off = end;
+    }
+    Ok(child)
+}
+
+/// Where a leaf entry's value is, within an encoded page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CellPos {
+    /// `page[start..start + len]`
+    Inline { start: usize, len: usize },
+    Overflow { len: u32, first: PageId },
+}
+
+/// Parse the leaf entry starting at byte `off`: returns the key's position
+/// (`page[kstart..kstart + klen]`), the value's position, and the offset of
+/// the next entry. Validates bounds so corrupt pages give errors.
+pub fn page_leaf_entry(page: &PageBuf, off: usize) -> Result<(usize, usize, CellPos, usize)> {
+    if off + 4 > PAGE_SIZE {
+        return Err(corrupt!("B+tree node entry runs past end of page"));
+    }
+    let klen = get_u16(page, off) as usize;
+    let raw_vlen = get_u16(page, off + 2);
+    let overflow = raw_vlen & OVERFLOW_FLAG != 0;
+    let vlen = if overflow { 8 } else { raw_vlen as usize };
+    let kstart = off + 4;
+    let vstart = kstart + klen;
+    if vstart + vlen > PAGE_SIZE {
+        return Err(corrupt!("B+tree node entry runs past end of page"));
+    }
+    let cell = if overflow {
+        CellPos::Overflow {
+            len: get_u32(page, vstart),
+            first: get_u32(page, vstart + 4),
+        }
+    } else {
+        CellPos::Inline { start: vstart, len: vlen }
+    };
+    Ok((kstart, klen, cell, vstart + vlen))
+}
+
+/// For an encoded leaf: the cell stored under `key`, if any.
+pub fn page_leaf_lookup(page: &PageBuf, key: &[u8]) -> Result<Option<Cell>> {
+    let mut off = NODE_HEADER;
+    for _ in 0..page_num_keys(page) {
+        let (kstart, klen, cell, next) = page_leaf_entry(page, off)?;
+        match page[kstart..kstart + klen].cmp(key) {
+            std::cmp::Ordering::Less => off = next,
+            std::cmp::Ordering::Greater => return Ok(None), // keys are sorted
+            std::cmp::Ordering::Equal => {
+                return Ok(Some(match cell {
+                    CellPos::Inline { start, len } => Cell::Inline(page[start..start + len].to_vec()),
+                    CellPos::Overflow { len, first } => Cell::Overflow { len, first },
+                }))
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Encoded size of a node without decoding it (see [`Node::size`]).
+pub fn page_node_size(page: &PageBuf) -> Result<usize> {
+    let leaf = page_is_leaf(page)?;
+    let mut off = NODE_HEADER;
+    for _ in 0..page_num_keys(page) {
+        if off + 4 > PAGE_SIZE {
+            return Err(corrupt!("B+tree node entry runs past end of page"));
+        }
+        let klen = get_u16(page, off) as usize;
+        off += if leaf {
+            let raw = get_u16(page, off + 2);
+            4 + klen + if raw & OVERFLOW_FLAG != 0 { 8 } else { raw as usize }
+        } else {
+            2 + klen + 4
+        };
+    }
+    Ok(off)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,6 +452,39 @@ mod tests {
         put_u16(&mut p[..], 1, 1000); // claims far more entries than fit
         put_u16(&mut p[..], NODE_HEADER, 4000);
         assert!(Node::decode(&p).is_err());
+    }
+
+    #[test]
+    fn in_page_helpers_agree_with_decode() {
+        let leaf = Node::Leaf {
+            keys: vec![b"a".to_vec(), b"c".to_vec(), b"e".to_vec()],
+            vals: vec![
+                Cell::Inline(b"1".to_vec()),
+                Cell::Overflow { len: 5000, first: 9 },
+                Cell::Inline(vec![]),
+            ],
+            next: 0,
+        };
+        let mut p = new_page_buf();
+        leaf.encode(&mut p);
+        assert!(page_is_leaf(&p).unwrap());
+        assert_eq!(page_node_size(&p).unwrap(), leaf.size());
+        assert_eq!(page_leaf_lookup(&p, b"a").unwrap(), Some(Cell::Inline(b"1".to_vec())));
+        assert_eq!(page_leaf_lookup(&p, b"c").unwrap(), Some(Cell::Overflow { len: 5000, first: 9 }));
+        assert_eq!(page_leaf_lookup(&p, b"b").unwrap(), None);
+        assert_eq!(page_leaf_lookup(&p, b"z").unwrap(), None);
+
+        let internal = Node::Internal {
+            keys: vec![b"d".to_vec(), b"h".to_vec()],
+            children: vec![10, 20, 30],
+        };
+        internal.encode(&mut p);
+        assert!(!page_is_leaf(&p).unwrap());
+        assert_eq!(page_node_size(&p).unwrap(), internal.size());
+        for (key, child) in [(&b"a"[..], 10), (b"d", 20), (b"e", 20), (b"h", 30), (b"z", 30)] {
+            assert_eq!(page_find_child(&p, Some(key)).unwrap(), child, "{key:?}");
+        }
+        assert_eq!(page_find_child(&p, None).unwrap(), 10);
     }
 
     #[test]

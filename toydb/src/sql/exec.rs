@@ -121,31 +121,34 @@ impl ScanExec {
         }
     }
 
-    /// Next `(key, row)` pair; used directly by UPDATE and DELETE.
-    pub fn next_entry(&mut self, s: &mut dyn PageStore) -> Result<Option<(Vec<u8>, Row)>> {
+    /// Position the cursor on first use.
+    fn open(&mut self, s: &mut dyn PageStore) -> Result<()> {
         if self.cursor.is_none() {
-            let as_ref = |b: &Bound<Vec<u8>>| match b {
-                Bound::Included(k) => Bound::Included(k.clone()),
-                Bound::Excluded(k) => Bound::Excluded(k.clone()),
-                Bound::Unbounded => Bound::Unbounded,
-            };
-            let (lo, hi) = (as_ref(&self.bounds.0), as_ref(&self.bounds.1));
+            let (lo, hi) = &self.bounds;
             self.cursor = Some(self.tree.range(
                 s,
                 lo.as_ref().map(|k| k.as_slice()),
                 hi.as_ref().map(|k| k.as_slice()),
             )?);
         }
-        match self.cursor.as_mut().unwrap().next(s)? {
-            Some((k, v)) => Ok(Some((k, decode_row(&v)?))),
-            None => Ok(None),
-        }
+        Ok(())
+    }
+
+    /// Next `(key, row)` pair; used directly by UPDATE and DELETE.
+    pub fn next_entry(&mut self, s: &mut dyn PageStore) -> Result<Option<(Vec<u8>, Row)>> {
+        self.open(s)?;
+        self.cursor
+            .as_mut()
+            .unwrap()
+            .next_with(s, |k, v| Ok((k.to_vec(), decode_row(v)?)))
     }
 }
 
 impl Executor for ScanExec {
     fn next(&mut self, s: &mut dyn PageStore) -> Result<Option<Row>> {
-        Ok(self.next_entry(s)?.map(|(_, row)| row))
+        self.open(s)?;
+        // Decode straight from the cursor's page copy: no key/value copies.
+        self.cursor.as_mut().unwrap().next_with(s, |_, v| decode_row(v))
     }
 }
 
@@ -201,32 +204,39 @@ impl AggregateExec {
                 aggs.iter().map(|_| BTreeSet::new()).collect(),
             )
         };
-        let mut groups: BTreeMap<Vec<Value>, GroupState> = BTreeMap::new();
-        if self.groups.is_empty() {
-            // An aggregate without GROUP BY yields one row even for no input.
-            groups.insert(vec![], fresh(&self.aggs));
-        }
-        while let Some(row) = self.input.next(s)? {
-            let key = self.groups.iter().map(|g| g.eval(&row)).collect::<Result<Vec<_>>>()?;
-            let (accs, seen) = groups.entry(key).or_insert_with(|| fresh(&self.aggs));
-            for (i, agg) in self.aggs.iter().enumerate() {
+        let finish = |mut key: Vec<Value>, (accs, _): GroupState| {
+            key.extend(accs.into_iter().map(Accumulator::finish));
+            key
+        };
+        let feed = |aggs: &[AggCall], (accs, seen): &mut GroupState, row: &Row| -> Result<()> {
+            for (i, agg) in aggs.iter().enumerate() {
                 let v = match &agg.arg {
                     None => Value::Boolean(true), // COUNT(*): count every row
-                    Some(e) => e.eval(&row)?,
+                    Some(e) => e.eval(row)?,
                 };
                 if agg.distinct && !v.is_null() && !seen[i].insert(v.clone()) {
                     continue;
                 }
                 accs[i].add(v)?;
             }
+            Ok(())
+        };
+        if self.groups.is_empty() {
+            // No GROUP BY: a single group, which exists even for no input
+            // (so `SELECT COUNT(*) FROM empty` returns 0).
+            let mut state = fresh(&self.aggs);
+            while let Some(row) = self.input.next(s)? {
+                feed(&self.aggs, &mut state, &row)?;
+            }
+            return Ok(vec![finish(vec![], state)]);
         }
-        Ok(groups
-            .into_iter()
-            .map(|(mut key, (accs, _))| {
-                key.extend(accs.into_iter().map(Accumulator::finish));
-                key
-            })
-            .collect())
+        let mut groups: BTreeMap<Vec<Value>, GroupState> = BTreeMap::new();
+        while let Some(row) = self.input.next(s)? {
+            let key = self.groups.iter().map(|g| g.eval(&row)).collect::<Result<Vec<_>>>()?;
+            let state = groups.entry(key).or_insert_with(|| fresh(&self.aggs));
+            feed(&self.aggs, state, &row)?;
+        }
+        Ok(groups.into_iter().map(|(k, st)| finish(k, st)).collect())
     }
 }
 

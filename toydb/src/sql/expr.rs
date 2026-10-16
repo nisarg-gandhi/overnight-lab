@@ -230,15 +230,24 @@ fn arith(op: BinOp, a: Value, b: Value) -> Result<Value> {
 /// case-sensitive. Classic two-pointer algorithm with backtracking to the
 /// last `%`, O(n*m) worst case.
 pub fn like(s: &str, pattern: &str) -> bool {
-    let s: Vec<char> = s.chars().collect();
-    let p: Vec<char> = pattern.chars().collect();
+    if s.is_ascii() && pattern.is_ascii() {
+        // Fast path: bytes are characters, no allocation needed.
+        like_slice(s.as_bytes(), pattern.as_bytes(), b'%', b'_')
+    } else {
+        let s: Vec<char> = s.chars().collect();
+        let p: Vec<char> = pattern.chars().collect();
+        like_slice(&s, &p, '%', '_')
+    }
+}
+
+fn like_slice<T: Copy + PartialEq>(s: &[T], p: &[T], any: T, one: T) -> bool {
     let (mut i, mut j) = (0, 0);
     let mut star: Option<(usize, usize)> = None; // (pattern pos after %, string pos)
     while i < s.len() {
-        if j < p.len() && (p[j] == '_' || (p[j] != '%' && p[j] == s[i])) {
+        if j < p.len() && (p[j] == one || (p[j] != any && p[j] == s[i])) {
             i += 1;
             j += 1;
-        } else if j < p.len() && p[j] == '%' {
+        } else if j < p.len() && p[j] == any {
             star = Some((j + 1, i));
             j += 1;
         } else if let Some((pj, si)) = star {
@@ -250,7 +259,7 @@ pub fn like(s: &str, pattern: &str) -> bool {
             return false;
         }
     }
-    p[j..].iter().all(|&c| c == '%')
+    p[j..].iter().all(|&c| c == any)
 }
 
 fn call(f: ScalarFn, mut args: Vec<Value>) -> Result<Value> {
@@ -422,6 +431,8 @@ mod tests {
         assert!(like("abcabc", "%bc%bc"));
         assert!(!like("abc", "abcd"));
         assert!(like("a%b", "a%b"));
+        assert!(like("héllo", "h_llo"));
+        assert!(!like("héllo", "h__llo"));
     }
 
     #[test]

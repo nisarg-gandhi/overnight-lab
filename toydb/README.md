@@ -169,7 +169,7 @@ toydb/
 │   └── bin/toydb.rs   the REPL
 ├── tests/             crash.rs, sql.rs, txn.rs, repl.rs
 ├── examples/          quickstart, bank, crash_recovery, demo.sql
-└── benches/           comparison against SQLite
+└── bench/             separate crate: benchmark against SQLite
 ```
 
 ## Testing
@@ -178,6 +178,8 @@ toydb/
 cargo test              # unit, property, crash-simulation and end-to-end tests
 cargo clippy --all-targets
 ```
+
+(The benchmark crate in `bench/` is separate so these never compile SQLite.)
 
 Highlights of the test suite:
 
@@ -199,8 +201,18 @@ Highlights of the test suite:
 
 ## Benchmarks
 
-See [Benchmarks in DESIGN.md](DESIGN.md#benchmarks) and run
-`cargo bench --bench compare` to compare with SQLite on your machine.
+`toydb/bench` compares toydb with SQLite (via `rusqlite`) on identical SQL:
+
+```sh
+cd bench && cargo run --release -- 20000
+```
+
+Typical ratios (toydb time / SQLite time) on the development VM: durable
+single-row commits **1.1×** (both are fsync-bound), point lookups **1.2×**,
+GROUP BY queries **1.2×**, scans **~4×**, bulk inserts **3–7×**, bulk deletes
+**~45×**. DESIGN.md has the full table, the methodology, and an explanation of
+where the time goes (mostly: decoding/encoding whole nodes instead of editing
+slotted pages in place).
 
 ## License
 
