@@ -20,6 +20,7 @@ pub mod btree;
 pub mod catalog;
 pub mod db;
 pub mod error;
+pub mod format;
 pub mod sql;
 pub mod storage;
 pub mod txn;
