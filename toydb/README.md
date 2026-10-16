@@ -180,7 +180,7 @@ toydb/
 │   ├── db.rs          Database / Session (public API, transactions)
 │   ├── format.rs      ASCII tables
 │   └── bin/toydb.rs   the REPL
-├── tests/             crash.rs, sql.rs, txn.rs, index.rs, repl.rs
+├── tests/             crash, sql, txn, index, join, fuzz, repl
 ├── examples/          quickstart, bank, crash_recovery, demo.sql
 └── bench/             separate crate: benchmark against SQLite
 ```
@@ -211,6 +211,9 @@ Highlights of the test suite:
   with and without secondary indexes, running the integrity checker after.
 * **Concurrency tests** run threads doing read-modify-write transactions and
   check that no update is lost.
+* **Robustness tests** feed the parser arbitrary text and token soup, the
+  page and row decoders random bytes, and the engine thousands of random
+  (mostly failing) statements, then run the integrity checker.
 * **Mutation checks**: breaking WAL replay or the commit fsync makes the
   crash tests fail (verified while developing).
 

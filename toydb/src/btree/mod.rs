@@ -35,6 +35,10 @@ use crate::storage::pager::new_page_buf;
 use crate::util::bytes::{get_u16, get_u32, put_u16, put_u32};
 use node::{Cell, Node, MAX_KEY_SIZE, MAX_LEAF_ENTRY, NODE_HEADER};
 
+/// No B+tree is this deep (with >= 7 keys per internal node, 2^32 pages fit
+/// in far fewer levels), so a deeper descent means corruption.
+const MAX_DEPTH: usize = 64;
+
 /// A node smaller than this (in bytes) after a delete is a merge candidate.
 const UNDERFLOW: usize = PAGE_SIZE / 4;
 
@@ -100,13 +104,16 @@ impl BTree {
     /// leftmost leaf for `None`).
     fn find_leaf(&self, s: &mut dyn PageStore, key: Option<&[u8]>) -> Result<PageId> {
         let mut id = self.root;
-        loop {
+        // A real tree is a few levels deep; a corrupt one could contain a
+        // cycle, which must become an error rather than an infinite loop.
+        for _ in 0..MAX_DEPTH {
             let page = s.read(id)?;
             if node::page_is_leaf(page)? {
                 return Ok(id);
             }
             id = node::page_find_child(page, key)?;
         }
+        Err(corrupt!("B+tree deeper than {MAX_DEPTH} levels (cycle?)"))
     }
 
     /// Iterate over keys in `[start, end]` (bounds as given).
