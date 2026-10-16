@@ -1,0 +1,73 @@
+repo,setup,welcome,fit,programs,one_liner
+pytorch/pytorch,4,6,9,,The core deep-learning framework; huge C++/CUDA codebase with Python frontend
+Lightning-AI/pytorch-lightning,7,5,9,,High-level PyTorch training framework (Trainer/Fabric)
+Lightning-AI/torchmetrics,9,7,10,,100+ PyTorch metric implementations with a uniform API
+pytorch/vision,7,6,9,,Datasets/transforms/models for computer vision in PyTorch
+pytorch/ignite,8,8,9,GSoC(PyTorch-Ignite historically),Lightweight PyTorch training/eval library
+huggingface/transformers,7,8,10,,Model definitions + pipelines for thousands of pretrained models
+huggingface/datasets,8,7,9,,Dataset loading/processing library (Arrow-backed)
+huggingface/diffusers,7,8,9,,Diffusion-model pipelines (image/video/audio generation)
+huggingface/peft,9,9,10,,Parameter-efficient fine-tuning (LoRA etc.) for PyTorch models
+huggingface/accelerate,7,6,8,,Device/distributed abstraction for PyTorch training
+huggingface/trl,7,6,9,,Post-training (SFT/DPO/GRPO) library for LLMs
+huggingface/huggingface_hub,9,8,8,,Python client for the Hugging Face Hub (+ hf CLI)
+scikit-learn/scikit-learn,8,8,10,,The classic Python ML library
+jax-ml/jax,6,5,8,,Composable transformations of NumPy programs (grad/jit/vmap)
+google/flax,6,4,8,,Neural-network library for JAX
+patrick-kidger/equinox,8,6,8,,Elegant PyTorch-like NN library for JAX
+optuna/optuna,9,8,9,,Hyperparameter-optimization framework
+mlflow/mlflow,7,8,9,,ML lifecycle platform: tracking/registry/GenAI tracing + evaluation
+keras-team/keras,7,5,9,GSoC(TensorFlow/Keras),Multi-backend (JAX/TF/PyTorch) deep-learning API
+sktime/sktime,8,10,9,GSoC(via NumFOCUS)/ESoC,Unified framework for ML with time series
+aeon-toolkit/aeon,8,9,9,GSoC(via NumFOCUS),Time-series ML toolkit (classification/clustering/anomaly)
+unit8co/darts,8,7,9,,Time-series forecasting/anomaly-detection library
+pyg-team/pytorch_geometric,7,5,9,,Graph neural networks for PyTorch
+kornia/kornia,8,7,9,,Differentiable computer-vision library for PyTorch
+explosion/spaCy,7,4,8,,Industrial NLP library
+pymc-devs/pymc,7,9,8,GSoC(via NumFOCUS),Probabilistic programming / Bayesian modelling
+deepchem/deepchem,6,7,8,GSoC(DeepChem),Deep learning for chemistry/biology
+langchain-ai/langchain,7,5,8,,LLM application framework
+run-llama/llama_index,7,5,8,,RAG / LLM data framework
+BerriAI/litellm,6,5,8,,Unified proxy/SDK for 100+ LLM APIs
+pydantic/pydantic-ai,8,7,9,,Type-safe agent framework from the Pydantic team
+microsoft/autogen,6,3,8,,Multi-agent framework (now maintenance mode)
+vllm-project/vllm,4,6,8,,High-throughput LLM inference engine (GPU-centric)
+stanfordnlp/dspy,8,7,9,,Programming (not prompting) LMs; optimizers for LM pipelines
+huggingface/smolagents,8,4,8,,Minimal code-agent library
+deepset-ai/haystack,8,7,8,,Production LLM/RAG pipeline framework
+567-labs/instructor,8,5,8,,Structured outputs from LLMs via Pydantic
+pandas-dev/pandas,7,8,9,GSoC(via NumFOCUS),DataFrame library
+pola-rs/polars,5,7,7,,Rust DataFrame engine with Python API
+duckdb/duckdb-python,4,5,6,,Python bindings for DuckDB (C++/pybind11)
+ibis-project/ibis,7,7,7,,Portable dataframe API over SQL engines
+narwhals-dev/narwhals,9,10,8,,Lightweight compatibility layer between dataframe libraries
+pydata/xarray,8,9,8,GSoC(via NumFOCUS),N-dimensional labelled arrays (NetCDF/Zarr)
+dask/dask,7,6,8,,Parallel computing with task scheduling
+marimo-team/marimo,7,8,8,,Reactive Python notebook (Python + TypeScript)
+unionai-oss/pandera,8,7,8,,Dataframe validation library
+Textualize/textual,8,4,6,,TUI framework
+Textualize/rich,8,3,6,,Rich text/formatting in the terminal
+fastapi/typer,8,4,7,,CLI library based on type hints
+pytest-dev/pytest,8,8,8,GSoC(PSF historically),Python testing framework
+pylint-dev/pylint,8,8,8,GSoC(PSF historically),Static code analyser for Python
+python/mypy,7,6,8,,Static type checker for Python
+pypa/hatch,8,5,6,,Python project manager/build backend
+astral-sh/ruff,6,8,6,,Rust-based Python linter/formatter
+secdev/scapy,8,7,10,,Packet crafting/sniffing/dissection in Python
+encode/httpx,8,2,9,,Async HTTP client (development frozen)
+aio-libs/aiohttp,7,7,9,,Async HTTP client/server
+urllib3/urllib3,8,7,9,,HTTP client library underneath requests
+psf/requests,8,3,8,,HTTP for Humans (feature-frozen)
+mitmproxy/mitmproxy,7,7,10,,Interactive TLS-capable intercepting HTTP proxy
+rthalley/dnspython,8,6,10,,DNS toolkit for Python
+ktbyers/netmiko,7,5,9,,Multi-vendor SSH library for network devices
+netbox-community/netbox,7,7,9,,Network source-of-truth / IPAM / DCIM (Django)
+fastapi/fastapi,8,5,8,,Web framework (many doc-translation PRs)
+zulip/zulip,9,10,6,GSoC(Zulip),Open-source team chat (Django + TypeScript)
+sympy/sympy,8,8,7,GSoC(SymPy),Symbolic mathematics in Python
+networkx/networkx,8,8,8,GSoC(via NumFOCUS),Graph/network analysis
+napari/napari,7,8,7,,N-dimensional image viewer
+scikit-image/scikit-image,8,8,8,,Image processing in Python
+matplotlib/matplotlib,8,9,8,GSoC(via NumFOCUS),Plotting library
+mesa/mesa,8,9,7,GSoC(Mesa),Agent-based modelling in Python
+numpy/numpy,6,8,8,,N-dimensional arrays (C + Python)
