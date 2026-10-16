@@ -7,6 +7,7 @@
 pub mod btree;
 pub mod error;
 pub mod storage;
+pub mod txn;
 pub mod util;
 
 pub use error::{Error, Result};
