@@ -59,7 +59,7 @@ Other ways to run the shell:
 ./target/release/toydb my.db < examples/demo.sql     # run a script
 ```
 
-Shell commands: `.help`, `.tables`, `.schema [table]`, `.stats`,
+Shell commands: `.help`, `.tables`, `.schema [table]`, `.stats`, `.check`,
 `.timer on|off`, `.read FILE`, `.checkpoint`, `.quit`.
 
 ### As a library
@@ -98,6 +98,11 @@ Examples (`cargo run --example <name>`):
 * B+tree with node splits, merges on delete, linked leaves for range
   scans, and overflow pages for large values (rows can be megabytes).
 * Order-preserving key encoding so `WHERE pk < 10` is a range scan.
+* Secondary indexes (`CREATE [UNIQUE] INDEX`, column `UNIQUE`
+  constraints), maintained by INSERT/UPDATE/DELETE and used by the planner
+  for equality and range predicates.
+* `.check` / `check_integrity()` verifies every B+tree and that each index
+  matches its table exactly.
 
 **Durability**
 * Write-ahead log of full page images with CRC-32 and a per-generation
@@ -115,13 +120,14 @@ Examples (`cargo run --example <name>`):
 
 **SQL**
 * `CREATE TABLE [IF NOT EXISTS]`, `DROP TABLE [IF EXISTS]`
+* `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON t (cols)`, `DROP INDEX`
 * `INSERT INTO t [(cols)] VALUES (...), (...)`
 * `SELECT [DISTINCT] ... FROM t WHERE ... GROUP BY ... HAVING ...
   ORDER BY ... [ASC|DESC] LIMIT n OFFSET m`
 * `UPDATE t SET ... WHERE ...`, `DELETE FROM t WHERE ...`
 * `EXPLAIN <statement>`
 * Types: `INTEGER`, `REAL`, `TEXT`, `BOOLEAN` (+ `NULL`); constraints
-  `PRIMARY KEY`, `NOT NULL`.
+  `PRIMARY KEY`, `NOT NULL`, `UNIQUE`.
 * Operators: `+ - * / %`, `||`, comparisons, `AND OR NOT` (three-valued
   logic), `IS [NOT] NULL`, `[NOT] LIKE`, `[NOT] IN (...)`,
   `[NOT] BETWEEN`.
@@ -137,10 +143,11 @@ toydb is a learning project; these are deliberate simplifications (see
 DESIGN.md for why and how each could be lifted):
 
 * **No joins or subqueries.** A query reads one table.
-* **No secondary indexes.** Only the primary key is indexed; other
-  predicates are evaluated by scanning.
-* **Single-column primary keys only**; no `UNIQUE`, `CHECK`, `DEFAULT`,
-  foreign keys or `ALTER TABLE`.
+* **Rule-based planning.** The planner picks an access path with fixed
+  rules (primary key, then index equality, then ranges); there are no
+  statistics or cost model, and only an index's first column is used.
+* **Single-column primary keys only**; no `CHECK`, `DEFAULT`, foreign keys
+  or `ALTER TABLE`.
 * **Coarse locking.** One writer *or* many readers for the whole database;
   readers block writers (no MVCC/snapshot isolation).
 * **No-steal buffer management.** A transaction's dirty pages stay in
@@ -149,7 +156,8 @@ DESIGN.md for why and how each could be lifted):
 * **Results are materialized.** `execute` returns all rows at once rather
   than streaming them; sorting and grouping are in-memory.
 * **One process at a time** per database file (enforced with a file lock).
-* Keys are limited to 512 bytes; `fsync=false` mode trades crash safety for
+* Keys (including index keys: indexed values plus the primary key) are
+  limited to 512 bytes; `fsync=false` mode trades crash safety for
   speed like SQLite's `synchronous=OFF`.
 
 ## Project layout
@@ -167,7 +175,7 @@ toydb/
 │   ├── db.rs          Database / Session (public API, transactions)
 │   ├── format.rs      ASCII tables
 │   └── bin/toydb.rs   the REPL
-├── tests/             crash.rs, sql.rs, txn.rs, repl.rs
+├── tests/             crash.rs, sql.rs, txn.rs, index.rs, repl.rs
 ├── examples/          quickstart, bank, crash_recovery, demo.sql
 └── bench/             separate crate: benchmark against SQLite
 ```
@@ -190,10 +198,12 @@ Highlights of the test suite:
   number of I/O operations, then randomly loses or tears (at 512-byte sector
   granularity) every write that wasn't fsynced. After recovery the database
   must contain exactly the committed transactions — plus, possibly, the one
-  whose commit was in flight. A bank-transfer workload checks that money is
-  never created or destroyed.
+  whose commit was in flight. A bank-transfer workload (with indexes) checks
+  that money is never created or destroyed and that every index still
+  matches its table.
 * **Differential SQL tests** run random INSERT/UPDATE/DELETE/SELECT and
-  BEGIN/COMMIT/ROLLBACK sequences against both toydb and an in-memory model.
+  BEGIN/COMMIT/ROLLBACK sequences against both toydb and an in-memory model,
+  with and without secondary indexes, running the integrity checker after.
 * **Concurrency tests** run threads doing read-modify-write transactions and
   check that no update is lost.
 * **Mutation checks**: breaking WAL replay or the commit fsync makes the

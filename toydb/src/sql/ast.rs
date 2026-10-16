@@ -14,6 +14,8 @@ use crate::types::{DataType, Value};
 pub enum Statement {
     CreateTable(CreateTable),
     DropTable { name: String, if_exists: bool },
+    CreateIndex(CreateIndex),
+    DropIndex { name: String, if_exists: bool },
     Insert {
         table: String,
         columns: Option<Vec<String>>,
@@ -45,6 +47,17 @@ pub struct ColumnDef {
     pub ty: DataType,
     pub primary_key: bool,
     pub not_null: bool,
+    /// `UNIQUE` column constraint: backed by an automatically created index.
+    pub unique: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreateIndex {
+    pub name: String,
+    pub table: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+    pub if_not_exists: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -225,8 +238,25 @@ impl fmt::Display for CreateTable {
             } else if c.not_null {
                 f.write_str(" NOT NULL")?;
             }
+            if c.unique && !c.primary_key {
+                f.write_str(" UNIQUE")?;
+            }
         }
         f.write_str(")")
+    }
+}
+
+impl fmt::Display for CreateIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let cols: Vec<String> = self.columns.iter().map(|c| quote_ident(c)).collect();
+        write!(
+            f,
+            "CREATE {}INDEX {} ON {} ({})",
+            if self.unique { "UNIQUE " } else { "" },
+            quote_ident(&self.name),
+            quote_ident(&self.table),
+            cols.join(", ")
+        )
     }
 }
 

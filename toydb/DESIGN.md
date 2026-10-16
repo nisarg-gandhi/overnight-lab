@@ -16,7 +16,7 @@ Contents
 6. [The write-ahead log and crash recovery](#6-the-write-ahead-log-and-crash-recovery)
 7. [Transactions and locking](#7-transactions-and-locking)
 8. [Values, rows and keys](#8-values-rows-and-keys)
-9. [The catalog](#9-the-catalog)
+9. [The catalog and secondary indexes](#9-the-catalog-and-secondary-indexes)
 10. [The query pipeline](#10-the-query-pipeline)
 11. [Testing strategy](#11-testing-strategy)
 12. [Benchmarks](#benchmarks)
@@ -567,7 +567,7 @@ largest existing key (`BTree::last`), like SQLite's rowid tables.
 
 ---
 
-## 9. The catalog
+## 9. The catalog and secondary indexes
 
 *Module: `catalog.rs`*
 
@@ -575,12 +575,13 @@ Where do table definitions live? In a table, of course. `toydb_schema` is a
 B+tree whose root page is recorded in the header, with rows:
 
 ```text
-+-------+---------+----------+----------+------------------------------+
-| type  | name    | tbl_name | rootpage | sql                          |
-+-------+---------+----------+----------+------------------------------+
-| table | orders  | orders   | 7        | CREATE TABLE orders (...)    |
-| table | users   | users    | 2        | CREATE TABLE users (...)     |
-+-------+---------+----------+----------+------------------------------+
++-------+----------+----------+----------+-------------------------------------+
+| type  | name     | tbl_name | rootpage | sql                                 |
++-------+----------+----------+----------+-------------------------------------+
+| index | by_email | users    | 9        | CREATE UNIQUE INDEX by_email ON ... |
+| table | orders   | orders   | 7        | CREATE TABLE orders (...)           |
+| table | users    | users    | 2        | CREATE TABLE users (...)            |
++-------+----------+----------+----------+-------------------------------------+
 ```
 
 The schema is stored as **canonical SQL text** — the AST printed back out —
@@ -590,6 +591,45 @@ human-readable (`SELECT sql FROM toydb_schema`), and DDL is transactional
 with no extra machinery: CREATE/DROP TABLE are B+tree inserts/deletes in the
 current transaction. The in-memory catalog is a cache that is invalidated
 whenever a transaction or statement is rolled back.
+
+### Secondary indexes
+
+An index is one more B+tree. For a row whose primary-key bytes are `pk`, an
+index on columns `(a, b)` holds one entry:
+
+```text
+key   = encode(a) ++ encode(b) ++ pk          value = pk
+
+  index by_dept on emp(dept):
+    03 'eng' 00 00 | 01 80..01   ->  pk of row 1
+    03 'eng' 00 00 | 01 80..02   ->  pk of row 2
+    03 'ops' 00 00 | 01 80..07   ->  pk of row 7
+```
+
+* Appending `pk` makes keys unique even when many rows share a value, so
+  the B+tree needs no duplicate-key support.
+* The key encoding is *prefix-free* (fixed-width numbers, terminated
+  strings), so all entries for value `v` form one contiguous range
+  `[encode(v), successor(encode(v)))`, where `successor` increments the last
+  non-0xFF byte. Range predicates map onto the index the same way:
+  `col > v` starts at `successor(encode(v))`, `col <= v` ends there.
+* **Lookups** scan that range and fetch each row from the table by `pk`
+  (one extra B+tree lookup per row — why a full scan can beat an index
+  that matches most of the table).
+* **Maintenance**: INSERT adds an entry per index; DELETE removes them;
+  UPDATE removes *all* old entries of the updated rows before adding any new
+  ones, so swapping two UNIQUE values in one statement works.
+* **UNIQUE** is enforced on insert by checking whether the value's prefix
+  range is non-empty. As in standard SQL, rows with NULL in an indexed
+  column never conflict. A column-level `UNIQUE` creates an index named
+  `toydb_autoindex_<table>_<n>`, which can't be dropped (SQLite does the
+  same).
+* `CREATE INDEX` on a populated table builds the index by scanning it; a
+  UNIQUE violation aborts the statement and the savepoint removes every
+  page the half-built index used.
+* `check_integrity()` (`.check` in the shell) verifies every tree and that
+  each index has exactly one correct entry per row; the randomized and
+  crash tests run it after every workload.
 
 ---
 
@@ -676,15 +716,26 @@ columns would change the meaning, so they're an error (as in PostgreSQL).
 
 ### Access path selection
 
-The only index is the primary key, so the only choice is "full scan" vs
-"use the B+tree". The planner splits WHERE into AND-ed conjuncts and looks
-for `pk = const`, `pk < const` (either side), and `pk BETWEEN const AND
-const`. Equalities become a point lookup; inequalities are intersected into
-the tightest range. The full predicate is still evaluated afterwards, so the
-access path only has to be a superset — which keeps this optimization simple
-and obviously safe. Constants must be of the key's exact type (the key
-encoding orders values within a type, so `id < 2.5` on an INTEGER key falls
-back to a full scan).
+The planner splits WHERE into AND-ed conjuncts and, for the primary key and
+for the first column of each secondary index, collects `col = const`,
+`col < const` (either side) and `col BETWEEN const AND const`. Inequalities
+are intersected into the tightest range. Then it picks, with fixed rules:
+
+```text
+1. primary key equality          Scan t (point lookup id = 5)
+2. index equality (UNIQUE first) IndexScan t using by_email (email = 'a@x')
+3. primary key range             Scan t (range id >= 2 AND id <= 4)
+4. index range                   IndexScan t using by_salary (salary > 100)
+5. full scan                     Scan t (full)
+```
+
+The full predicate is still evaluated afterwards, so the access path only
+has to return a superset of the matching rows — which keeps this
+optimization simple and obviously safe. Constants must be of the column's
+exact type (the key encoding orders values within a type, so `id < 2.5` on
+an INTEGER key falls back to a scan). A real optimizer would estimate the
+cost of each option from statistics (Selinger et al., 1979); rule 4 can be
+slower than a full scan when the range covers most of the table.
 
 ### The Volcano executor
 
@@ -854,6 +905,9 @@ SQL → REPL → benchmarks.)
 | 22 | REPL without line-editing library | Zero deps; works fine with `rlwrap toydb` | `rustyline` |
 | 23 | Benchmarks in a separate `bench/` crate with a plain timing harness | `cargo test` on the main crate never compiles SQLite; a readable comparison table | `criterion` bench in the main crate |
 | 24 | Allocation-free in-page search for descents/lookups, cursors over a page copy | Profiling showed allocation dominated; keeps the decode/encode model for modifications | Full slotted-page rewrite |
+| 25 | Secondary index entries `encode(cols) ++ pk -> pk` | Unique keys without duplicate support in the B+tree; prefix ranges for lookups | Duplicate keys with posting lists |
+| 26 | UPDATE removes all old index entries before inserting new ones | Statement-level (not row-level) UNIQUE checking, so swaps work | Deferred constraint checking |
+| 27 | Rule-based access path choice | Predictable, explainable with EXPLAIN | Cost-based with statistics |
 
 ---
 
@@ -861,9 +915,9 @@ SQL → REPL → benchmarks.)
 
 Roughly in order of how much each would teach:
 
-1. **Secondary indexes** (`CREATE INDEX`): a second B+tree mapping
-   `encode(indexed value) ++ encode(pk)` → empty; maintained by DML; used by
-   the planner. The key encoding was designed to concatenate for this.
+1. **Covering index scans and multi-column index use**: answer a query
+   from the index alone when it has every needed column; use equality on
+   leading columns plus a range on the next.
 2. **Joins**: nested-loop join as a new operator, then index nested-loop
    using the primary key, then hash join. The binder would need multi-table
    scopes.
@@ -873,6 +927,6 @@ Roughly in order of how much each would teach:
    truncation of separators.
 6. **Steal + undo logging** (ARIES) to support transactions larger than RAM.
 7. **External merge sort** for ORDER BY on large inputs.
-8. **A cost-based optimizer** once there is more than one access path.
+8. **A cost-based optimizer** with table/index statistics.
 9. Composite primary keys, UNIQUE/CHECK/DEFAULT, ALTER TABLE.
 10. `VACUUM` to shrink the file.

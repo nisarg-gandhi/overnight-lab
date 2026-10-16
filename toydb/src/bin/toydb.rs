@@ -21,8 +21,10 @@ use toydb::{Database, Options, QueryResult, Session};
 
 const HELP: &str = "\
 Statements (end each with ;):
-  CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT NOT NULL, score REAL, ok BOOLEAN)
+  CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, score REAL, ok BOOLEAN)
   DROP TABLE [IF EXISTS] t
+  CREATE [UNIQUE] INDEX name ON t (col, ...)
+  DROP INDEX [IF EXISTS] name
   INSERT INTO t [(cols)] VALUES (...), (...)
   SELECT [DISTINCT] exprs FROM t [WHERE ...] [GROUP BY ...] [HAVING ...]
          [ORDER BY ... [DESC]] [LIMIT n [OFFSET m]]
@@ -38,6 +40,7 @@ Shell commands:
   .stats                       page cache and file statistics
   .timer on|off                print how long each statement takes
   .read FILE                   execute statements from a file
+  .check                       verify B+trees and indexes are consistent
   .checkpoint                  flush the WAL into the database file
   .quit                        exit (also Ctrl-D)
 ";
@@ -159,6 +162,11 @@ impl Shell {
                 }
                 Some(Err(e)) => eprintln!("Error: {e}"),
                 None => eprintln!("usage: .read FILE"),
+            },
+            ".check" => match self.session.check_integrity() {
+                Ok(p) if p.is_empty() => println!("ok"),
+                Ok(problems) => problems.iter().for_each(|p| println!("{p}")),
+                Err(e) => eprintln!("Error: {e}"),
             },
             ".checkpoint" => {
                 if let Err(e) = self.db.checkpoint() {

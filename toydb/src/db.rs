@@ -143,6 +143,11 @@ impl Database {
         }
     }
 
+    /// See [`Session::check_integrity`].
+    pub fn check_integrity(&self) -> Result<Vec<String>> {
+        self.session().check_integrity()
+    }
+
     /// Names of all user tables, read through a fresh session (so it takes
     /// a shared lock and never sees another session's uncommitted DDL).
     pub fn table_names(&self) -> Result<Vec<String>> {
@@ -172,6 +177,20 @@ impl Session {
     /// Is an explicit transaction (BEGIN ...) open?
     pub fn in_transaction(&self) -> bool {
         self.in_txn
+    }
+
+    /// Check the database's internal consistency (B+tree invariants, and
+    /// that every index has exactly the right entry for every row). Returns
+    /// the problems found; an empty list means all is well.
+    pub fn check_integrity(&mut self) -> Result<Vec<String>> {
+        self.shared
+            .locks
+            .acquire(self.id, LockMode::Shared, self.shared.lock_timeout)?;
+        let r = self.shared.engine().check_integrity();
+        if !self.in_txn {
+            self.shared.locks.release(self.id);
+        }
+        r
     }
 
     /// Names of all user tables, as seen by this session.

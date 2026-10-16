@@ -33,7 +33,7 @@ use std::ops::Bound;
 
 use super::ast::{BinOp, Expr, Select, SelectItem, UnOp};
 use super::expr::{AggFn, BExpr, ScalarFn};
-use crate::catalog::{Catalog, Table};
+use crate::catalog::{Catalog, Index, Table};
 use crate::error::{query_err, Result};
 use crate::types::Value;
 
@@ -46,6 +46,14 @@ pub enum Access {
     Key(Value),
     /// Rows whose primary key is within the bounds.
     Range { lo: Bound<Value>, hi: Bound<Value> },
+    /// Rows found through a secondary index, using bounds on its first
+    /// column (`eq` if it is constrained to a single value), in index order.
+    Index {
+        index: Index,
+        eq: Option<Value>,
+        lo: Bound<Value>,
+        hi: Bound<Value>,
+    },
 }
 
 /// One aggregate function call, e.g. `SUM(price * qty)`.
@@ -216,44 +224,53 @@ fn tighter_hi(cur: &Bound<Value>, new: &Bound<Value>) -> bool {
     }
 }
 
-/// Pick the cheapest way to read `table` given a WHERE clause.
-pub fn choose_access(table: &Table, filter: Option<&Expr>) -> Access {
-    let (Some(pk), Some(filter)) = (table.pk, filter) else {
-        return Access::Full;
-    };
-    let pk_col = &table.columns[pk];
-    let is_pk = |e: &Expr| {
+/// What the WHERE clause says about one column, as constant bounds.
+struct ColumnBounds {
+    eq: Option<Value>,
+    lo: Bound<Value>,
+    hi: Bound<Value>,
+}
+
+impl ColumnBounds {
+    fn is_range(&self) -> bool {
+        !matches!((&self.lo, &self.hi), (Bound::Unbounded, Bound::Unbounded))
+    }
+}
+
+/// Extract `col = c`, `col < c` (either side), `col BETWEEN c1 AND c2`
+/// constraints on column `col` from the AND-ed parts of the filter.
+fn column_bounds(table: &Table, parts: &[&Expr], col: usize) -> ColumnBounds {
+    let column = &table.columns[col];
+    let is_col = |e: &Expr| {
         matches!(e, Expr::Column(q, n)
-            if n == &pk_col.name && q.as_ref().is_none_or(|q| q == &table.name))
+            if n == &column.name && q.as_ref().is_none_or(|q| q == &table.name))
     };
-    // Only use constants of exactly the key's type: the key encoding orders
-    // values within one type, so `id < 2.5` on an INTEGER key can't become
-    // a byte range. Such predicates still work, via a full scan + filter.
+    // Only use constants of exactly the column's type: the key encoding
+    // orders values within one type, so `id < 2.5` on an INTEGER column
+    // can't become a byte range. Such predicates still work, via a scan.
     let usable = |e: &Expr| match e {
-        Expr::Literal(v) if v.data_type() == Some(pk_col.ty) => Some(v.clone()),
+        Expr::Literal(v) if v.data_type() == Some(column.ty) => Some(v.clone()),
         _ => None,
     };
-    let mut parts = vec![];
-    conjuncts(filter, &mut parts);
-    let (mut lo, mut hi) = (Bound::Unbounded, Bound::Unbounded);
-    let mut offer = |lo_new: Option<Bound<Value>>, hi_new: Option<Bound<Value>>| {
-        if let Some(b) = lo_new {
-            if tighter_lo(&lo, &b) {
-                lo = b;
+    let mut b = ColumnBounds { eq: None, lo: Bound::Unbounded, hi: Bound::Unbounded };
+    let offer = |b: &mut ColumnBounds, lo_new: Option<Bound<Value>>, hi_new: Option<Bound<Value>>| {
+        if let Some(n) = lo_new {
+            if tighter_lo(&b.lo, &n) {
+                b.lo = n;
             }
         }
-        if let Some(b) = hi_new {
-            if tighter_hi(&hi, &b) {
-                hi = b;
+        if let Some(n) = hi_new {
+            if tighter_hi(&b.hi, &n) {
+                b.hi = n;
             }
         }
     };
     for part in parts {
         match part {
             Expr::Binary(op, l, r) => {
-                let (op, v) = if let (true, Some(v)) = (is_pk(l), usable(r)) {
+                let (op, v) = if let (true, Some(v)) = (is_col(l), usable(r)) {
                     (*op, v)
-                } else if let (Some(v), true) = (usable(l), is_pk(r)) {
+                } else if let (Some(v), true) = (usable(l), is_col(r)) {
                     // `5 < id` is `id > 5`
                     let flipped = match op {
                         BinOp::Lt => BinOp::Gt,
@@ -267,26 +284,77 @@ pub fn choose_access(table: &Table, filter: Option<&Expr>) -> Access {
                     continue;
                 };
                 match op {
-                    BinOp::Eq => return Access::Key(v),
-                    BinOp::Lt => offer(None, Some(Bound::Excluded(v))),
-                    BinOp::LtEq => offer(None, Some(Bound::Included(v))),
-                    BinOp::Gt => offer(Some(Bound::Excluded(v)), None),
-                    BinOp::GtEq => offer(Some(Bound::Included(v)), None),
+                    BinOp::Eq => {
+                        if b.eq.is_none() {
+                            b.eq = Some(v);
+                        }
+                    }
+                    BinOp::Lt => offer(&mut b, None, Some(Bound::Excluded(v))),
+                    BinOp::LtEq => offer(&mut b, None, Some(Bound::Included(v))),
+                    BinOp::Gt => offer(&mut b, Some(Bound::Excluded(v)), None),
+                    BinOp::GtEq => offer(&mut b, Some(Bound::Included(v)), None),
                     _ => {}
                 }
             }
-            Expr::Between(x, a, b, false) if is_pk(x) => {
-                if let (Some(a), Some(b)) = (usable(a), usable(b)) {
-                    offer(Some(Bound::Included(a)), Some(Bound::Included(b)));
+            Expr::Between(x, lo, hi, false) if is_col(x) => {
+                if let (Some(lo), Some(hi)) = (usable(lo), usable(hi)) {
+                    offer(&mut b, Some(Bound::Included(lo)), Some(Bound::Included(hi)));
                 }
             }
             _ => {}
         }
     }
-    match (&lo, &hi) {
-        (Bound::Unbounded, Bound::Unbounded) => Access::Full,
-        _ => Access::Range { lo, hi },
+    b
+}
+
+/// Pick a way to read `table` given a WHERE clause. A simple rule-based
+/// choice, best first:
+///
+/// 1. primary key equality (one B+tree lookup)
+/// 2. equality on the first column of a secondary index (unique preferred)
+/// 3. primary key range
+/// 4. range on the first column of a secondary index
+/// 5. full scan
+///
+/// The whole WHERE clause is always re-checked on the rows produced, so the
+/// access path only has to return a superset of the matching rows.
+pub fn choose_access(table: &Table, filter: Option<&Expr>) -> Access {
+    let Some(filter) = filter else {
+        return Access::Full;
+    };
+    let mut parts = vec![];
+    conjuncts(filter, &mut parts);
+    let pk = table.pk.map(|pk| column_bounds(table, &parts, pk));
+    if let Some(ColumnBounds { eq: Some(v), .. }) = pk {
+        return Access::Key(v);
     }
+    let mut indexed: Vec<(&Index, ColumnBounds)> = table
+        .indexes
+        .iter()
+        .map(|ix| (ix, column_bounds(table, &parts, ix.columns[0])))
+        .collect();
+    // Unique indexes first: an equality on them matches at most one row.
+    indexed.sort_by_key(|(ix, _)| !ix.unique);
+    let index_access = |ix: &Index, b: ColumnBounds| Access::Index {
+        index: ix.clone(),
+        eq: b.eq,
+        lo: b.lo,
+        hi: b.hi,
+    };
+    if let Some(pos) = indexed.iter().position(|(_, b)| b.eq.is_some()) {
+        let (ix, b) = indexed.swap_remove(pos);
+        return index_access(ix, b);
+    }
+    if let Some(b) = pk {
+        if b.is_range() {
+            return Access::Range { lo: b.lo, hi: b.hi };
+        }
+    }
+    if let Some(pos) = indexed.iter().position(|(_, b)| b.is_range()) {
+        let (ix, b) = indexed.swap_remove(pos);
+        return index_access(ix, b);
+    }
+    Access::Full
 }
 
 // --- SELECT planning ---------------------------------------------------------------------
@@ -573,6 +641,18 @@ impl Plan {
                             .flatten()
                             .collect();
                         writeln!(f, "{pad}Scan {} (range {})", table.name, parts.join(" AND "))?
+                    }
+                    Access::Index { index, eq, lo, hi } => {
+                        let col = table.columns[index.columns[0]].name.as_str();
+                        let cond = match eq {
+                            Some(v) => format!("{col} = {}", v.to_sql()),
+                            None => [fmt_bound(col, lo, true), fmt_bound(col, hi, false)]
+                                .into_iter()
+                                .flatten()
+                                .collect::<Vec<_>>()
+                                .join(" AND "),
+                        };
+                        writeln!(f, "{pad}IndexScan {} using {} ({cond})", table.name, index.name)?
                     }
                 }
                 None

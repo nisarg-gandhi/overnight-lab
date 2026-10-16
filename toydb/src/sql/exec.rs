@@ -22,8 +22,8 @@ use super::planner::{
     choose_access, eval_const, plan_select, Access, AggCall, Binder, Plan, QueryPlan,
 };
 use crate::btree::{BTree, Cursor};
-use crate::catalog::{Catalog, Table, SCHEMA_TABLE};
-use crate::error::{query_err, Error, Result};
+use crate::catalog::{prefix_successor, Catalog, Table, SCHEMA_TABLE};
+use crate::error::{corrupt, query_err, Error, Result};
 use crate::storage::{PageStore, Storage};
 use crate::types::{decode_int_key, decode_row, encode_key, encode_row, Row, Value};
 
@@ -91,33 +91,71 @@ impl Executor for SingleRowExec {
     }
 }
 
-/// Encode an access path into B+tree key bounds.
+/// Encode an access path into key bounds on the B+tree it scans (the table
+/// for primary-key access, the index for index access).
 fn key_bounds(access: &Access) -> (Bound<Vec<u8>>, Bound<Vec<u8>>) {
     let enc = |b: &Bound<Value>| match b {
         Bound::Included(v) => Bound::Included(encode_key(v)),
         Bound::Excluded(v) => Bound::Excluded(encode_key(v)),
         Bound::Unbounded => Bound::Unbounded,
     };
+    // Index keys are `encode(value) ++ pk`, so "all entries for value v" is
+    // the prefix range [encode(v), successor(encode(v))).
+    let after = |v: &Value| match prefix_successor(&encode_key(v)) {
+        Some(k) => Bound::Excluded(k),
+        None => Bound::Unbounded,
+    };
     match access {
         Access::Full => (Bound::Unbounded, Bound::Unbounded),
         Access::Key(v) => (Bound::Included(encode_key(v)), Bound::Included(encode_key(v))),
         Access::Range { lo, hi } => (enc(lo), enc(hi)),
+        Access::Index { eq: Some(v), .. } => (Bound::Included(encode_key(v)), after(v)),
+        Access::Index { eq: None, lo, hi, .. } => {
+            let lo = match lo {
+                Bound::Included(v) => Bound::Included(encode_key(v)),
+                Bound::Excluded(v) => match after(v) {
+                    Bound::Excluded(k) => Bound::Included(k),
+                    _ => Bound::Unbounded, // can't happen; the filter re-checks anyway
+                },
+                Bound::Unbounded => Bound::Unbounded,
+            };
+            let hi = match hi {
+                Bound::Included(v) => after(v),
+                Bound::Excluded(v) => Bound::Excluded(encode_key(v)),
+                Bound::Unbounded => Bound::Unbounded,
+            };
+            (lo, hi)
+        }
     }
 }
 
-/// Reads rows from a table's B+tree, optionally restricted to a key range.
+/// Reads rows from a table, either directly from its B+tree (optionally
+/// restricted to a primary-key range) or through a secondary index.
 pub struct ScanExec {
+    /// The tree the cursor walks: the table, or the index.
     tree: BTree,
+    /// For index scans: the table to fetch rows from by primary key.
+    table: Option<BTree>,
     bounds: (Bound<Vec<u8>>, Bound<Vec<u8>>),
     cursor: Option<Cursor>,
 }
 
 impl ScanExec {
     pub fn new(table: &Table, access: Access) -> Self {
-        ScanExec {
-            tree: BTree::open(table.root),
-            bounds: key_bounds(&access),
-            cursor: None,
+        let bounds = key_bounds(&access);
+        match access {
+            Access::Index { index, .. } => ScanExec {
+                tree: BTree::open(index.root),
+                table: Some(BTree::open(table.root)),
+                bounds,
+                cursor: None,
+            },
+            _ => ScanExec {
+                tree: BTree::open(table.root),
+                table: None,
+                bounds,
+                cursor: None,
+            },
         }
     }
 
@@ -134,18 +172,31 @@ impl ScanExec {
         Ok(())
     }
 
-    /// Next `(key, row)` pair; used directly by UPDATE and DELETE.
+    /// Next `(primary key, row)` pair; used directly by UPDATE and DELETE.
     pub fn next_entry(&mut self, s: &mut dyn PageStore) -> Result<Option<(Vec<u8>, Row)>> {
         self.open(s)?;
-        self.cursor
-            .as_mut()
-            .unwrap()
-            .next_with(s, |k, v| Ok((k.to_vec(), decode_row(v)?)))
+        let cursor = self.cursor.as_mut().unwrap();
+        match self.table {
+            None => cursor.next_with(s, |k, v| Ok((k.to_vec(), decode_row(v)?))),
+            Some(table) => {
+                // The index entry's value is the row's primary key.
+                let Some(pk) = cursor.next_with(s, |_, v| Ok(v.to_vec()))? else {
+                    return Ok(None);
+                };
+                let row = table
+                    .get(s, &pk)?
+                    .ok_or_else(|| corrupt!("index entry points at a missing row"))?;
+                Ok(Some((pk, decode_row(&row)?)))
+            }
+        }
     }
 }
 
 impl Executor for ScanExec {
     fn next(&mut self, s: &mut dyn PageStore) -> Result<Option<Row>> {
+        if self.table.is_some() {
+            return Ok(self.next_entry(s)?.map(|(_, row)| row));
+        }
         self.open(s)?;
         // Decode straight from the cursor's page copy: no key/value copies.
         self.cursor.as_mut().unwrap().next_with(s, |_, v| decode_row(v))
@@ -367,6 +418,14 @@ impl Engine {
                 self.with_catalog(|cat, s| cat.drop_table(s, name, *if_exists))?;
                 Ok(QueryResult::Done("DROP TABLE".into()))
             }
+            Statement::CreateIndex(ci) => {
+                self.with_catalog(|cat, s| cat.create_index(s, ci))?;
+                Ok(QueryResult::Done("CREATE INDEX".into()))
+            }
+            Statement::DropIndex { name, if_exists } => {
+                self.with_catalog(|cat, s| cat.drop_index(s, name, *if_exists))?;
+                Ok(QueryResult::Done("DROP INDEX".into()))
+            }
             Statement::Insert { table, columns, rows } => self.insert(table, columns.as_deref(), rows),
             Statement::Update { table, set, filter } => self.update(table, set, filter.as_ref()),
             Statement::Delete { table, filter } => self.delete(table, filter.as_ref()),
@@ -407,6 +466,12 @@ impl Engine {
     fn create_table(&mut self, ct: &CreateTable) -> Result<QueryResult> {
         self.with_catalog(|cat, s| cat.create_table(s, ct))?;
         Ok(QueryResult::Done("CREATE TABLE".into()))
+    }
+
+    /// Verify all B+trees and that every index matches its table. Returns
+    /// a list of problems; empty means consistent.
+    pub fn check_integrity(&mut self) -> Result<Vec<String>> {
+        self.with_catalog(|cat, s| cat.check_integrity(s))
     }
 
     /// Run a catalog-modifying operation with both the catalog and storage.
@@ -490,6 +555,7 @@ impl Engine {
                 }
             };
             tree.insert(&mut self.storage, &key, &encode_row(&row))?;
+            table.index_insert(&mut self.storage, &row, &key)?;
         }
         Ok(QueryResult::Modified {
             verb: "INSERT",
@@ -538,17 +604,20 @@ impl Engine {
                 Some(pk) => encode_key(&new[pk]),
                 None => key.clone(),
             };
-            updates.push((key, new_key, new));
+            updates.push((key, new_key, new, old));
         }
         let tree = BTree::open(table.root);
         // Rows whose key changes are deleted first and re-inserted after, so
-        // `SET id = id + 1` doesn't collide with rows not yet updated.
-        for (key, new_key, _) in &updates {
+        // `SET id = id + 1` doesn't collide with rows not yet updated. The
+        // same goes for index entries: all old ones go before any new one is
+        // added, so swapping two UNIQUE values in one statement works.
+        for (key, new_key, _, old) in &updates {
+            table.index_delete(&mut self.storage, old, key)?;
             if key != new_key {
                 tree.delete(&mut self.storage, key)?;
             }
         }
-        for (key, new_key, row) in &updates {
+        for (key, new_key, row, _) in &updates {
             if key != new_key && tree.get(&mut self.storage, new_key)?.is_some() {
                 let pk = table.pk.unwrap();
                 return Err(Error::Constraint(format!(
@@ -558,6 +627,7 @@ impl Engine {
                 )));
             }
             tree.insert(&mut self.storage, new_key, &encode_row(row))?;
+            table.index_insert(&mut self.storage, row, new_key)?;
         }
         Ok(QueryResult::Modified {
             verb: "UPDATE",
@@ -569,7 +639,8 @@ impl Engine {
         let table = self.writable_table(name)?;
         let matches = self.matching(&table, filter)?;
         let tree = BTree::open(table.root);
-        for (key, _) in &matches {
+        for (key, row) in &matches {
+            table.index_delete(&mut self.storage, row, key)?;
             tree.delete(&mut self.storage, key)?;
         }
         Ok(QueryResult::Modified {

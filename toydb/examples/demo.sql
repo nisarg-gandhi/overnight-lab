@@ -47,3 +47,9 @@ SELECT SUM(salary) AS after_rollback FROM employees;
 
 -- The catalog is itself a table
 SELECT name, rootpage FROM toydb_schema;
+
+-- Secondary indexes: the planner uses them for equality and range predicates
+CREATE INDEX by_dept ON employees (dept);
+EXPLAIN SELECT name FROM employees WHERE dept = 'Research';
+SELECT name FROM employees WHERE dept = 'Research';
+.check

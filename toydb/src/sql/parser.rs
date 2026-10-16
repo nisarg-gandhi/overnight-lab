@@ -15,7 +15,9 @@
 //! update      := UPDATE ident SET ident = expr {, ident = expr} [WHERE expr]
 //! delete      := DELETE FROM ident [WHERE expr]
 //! create      := CREATE TABLE [IF NOT EXISTS] ident ( coldef {, coldef} )
-//! coldef      := ident type [PRIMARY KEY] [NOT NULL] [NULL]
+//!              | CREATE [UNIQUE] INDEX [IF NOT EXISTS] ident ON ident ( ident {, ident} )
+//! coldef      := ident type {PRIMARY KEY | NOT NULL | NULL | UNIQUE}
+//! drop        := DROP TABLE [IF EXISTS] ident | DROP INDEX [IF EXISTS] ident
 //!
 //! expr        := or
 //! or          := and {OR and}                                  (loosest)
@@ -337,16 +339,50 @@ impl Parser<'_> {
         Ok(Statement::Delete { table, filter })
     }
 
-    fn create(&mut self) -> Result<Statement> {
-        self.expect_kw(Keyword::Create)?;
-        self.expect_kw(Keyword::Table)?;
-        let if_not_exists = if self.eat_kw(Keyword::If) {
+    fn if_not_exists(&mut self) -> Result<bool> {
+        if self.eat_kw(Keyword::If) {
             self.expect_kw(Keyword::Not)?;
             self.expect_kw(Keyword::Exists)?;
-            true
+            Ok(true)
         } else {
-            false
-        };
+            Ok(false)
+        }
+    }
+
+    fn if_exists(&mut self) -> Result<bool> {
+        if self.eat_kw(Keyword::If) {
+            self.expect_kw(Keyword::Exists)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn create(&mut self) -> Result<Statement> {
+        self.expect_kw(Keyword::Create)?;
+        let unique = self.eat_kw(Keyword::Unique);
+        if unique || self.peek() == Some(&Token::Keyword(Keyword::Index)) {
+            self.expect_kw(Keyword::Index)?;
+            let if_not_exists = self.if_not_exists()?;
+            let name = self.ident()?;
+            self.expect_kw(Keyword::On)?;
+            let table = self.ident()?;
+            self.expect(&Token::LParen)?;
+            let mut columns = vec![self.ident()?];
+            while self.eat(&Token::Comma) {
+                columns.push(self.ident()?);
+            }
+            self.expect(&Token::RParen)?;
+            return Ok(Statement::CreateIndex(CreateIndex {
+                name,
+                table,
+                columns,
+                unique,
+                if_not_exists,
+            }));
+        }
+        self.expect_kw(Keyword::Table)?;
+        let if_not_exists = self.if_not_exists()?;
         let name = self.ident()?;
         self.expect(&Token::LParen)?;
         let mut columns = vec![];
@@ -375,6 +411,7 @@ impl Parser<'_> {
                 ty,
                 primary_key: false,
                 not_null: false,
+                unique: false,
             };
             loop {
                 if self.eat_kw(Keyword::Primary) {
@@ -386,6 +423,8 @@ impl Parser<'_> {
                     col.not_null = true;
                 } else if self.eat_kw(Keyword::Null) {
                     // explicit nullable: the default
+                } else if self.eat_kw(Keyword::Unique) {
+                    col.unique = true;
                 } else {
                     break;
                 }
@@ -405,13 +444,15 @@ impl Parser<'_> {
 
     fn drop_table(&mut self) -> Result<Statement> {
         self.expect_kw(Keyword::Drop)?;
+        if self.eat_kw(Keyword::Index) {
+            let if_exists = self.if_exists()?;
+            return Ok(Statement::DropIndex {
+                name: self.ident()?,
+                if_exists,
+            });
+        }
         self.expect_kw(Keyword::Table)?;
-        let if_exists = if self.eat_kw(Keyword::If) {
-            self.expect_kw(Keyword::Exists)?;
-            true
-        } else {
-            false
-        };
+        let if_exists = self.if_exists()?;
         Ok(Statement::DropTable {
             name: self.ident()?,
             if_exists,
@@ -721,6 +762,15 @@ mod tests {
         assert_eq!(parse("BEGIN TRANSACTION").unwrap(), Statement::Begin);
         assert_eq!(parse_script("begin; commit; rollback;").unwrap().len(), 3);
         assert!(matches!(parse("EXPLAIN SELECT 1").unwrap(), Statement::Explain(_)));
+        let Statement::CreateIndex(ci) = parse("create unique index if not exists i on t (a, \"B\")").unwrap() else {
+            panic!()
+        };
+        assert!(ci.unique && ci.if_not_exists);
+        assert_eq!(ci.to_string(), "CREATE UNIQUE INDEX i ON t (a, \"B\")");
+        assert_eq!(parse(&ci.to_string()).unwrap(), Statement::CreateIndex(CreateIndex { if_not_exists: false, ..ci }));
+        assert!(matches!(parse("DROP INDEX IF EXISTS i").unwrap(), Statement::DropIndex { if_exists: true, .. }));
+        let Statement::CreateTable(ct) = parse("CREATE TABLE t (a INTEGER UNIQUE NOT NULL)").unwrap() else { panic!() };
+        assert_eq!(ct.to_string(), "CREATE TABLE t (a INTEGER NOT NULL UNIQUE)");
     }
 
     #[test]

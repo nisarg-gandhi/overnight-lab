@@ -233,8 +233,10 @@ fn bank_transfers_survive_power_failures() {
         {
             let db = Database::open_vfs(&vfs, "bank.db", options.clone()).unwrap();
             let mut s = db.session();
-            s.execute("CREATE TABLE acct (id INTEGER PRIMARY KEY, owner TEXT, balance INTEGER NOT NULL)")
+            s.execute("CREATE TABLE acct (id INTEGER PRIMARY KEY, owner TEXT UNIQUE, balance INTEGER NOT NULL)")
                 .unwrap();
+            // Every transfer also rewrites entries in this index.
+            s.execute("CREATE INDEX by_balance ON acct (balance)").unwrap();
             s.execute("BEGIN").unwrap();
             for i in 0..accounts {
                 s.execute(&format!("INSERT INTO acct VALUES ({i}, 'owner {i}', 1000)")).unwrap();
@@ -268,6 +270,13 @@ fn bank_transfers_survive_power_failures() {
                 int(&mut s, "SELECT SUM(balance) FROM acct"),
                 accounts as i64 * 1000,
                 "seed {seed} round {round}: money was created or destroyed"
+            );
+            let problems = s.check_integrity().unwrap();
+            assert!(problems.is_empty(), "seed {seed} round {round}: {problems:?}");
+            assert_eq!(
+                int(&mut s, "SELECT COUNT(*) FROM acct WHERE balance >= -1000000"),
+                accounts as i64,
+                "index scan sees every row"
             );
         }
     }
